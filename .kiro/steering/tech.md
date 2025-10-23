@@ -11,7 +11,7 @@
 - **Zustand** - Lightweight state management
 - **React Query** - Server state management and caching
 - **Expo Camera & Image Picker** - Camera functionality and photo selection
-- **Google Gemini 2.5 Flash API** - AI-powered food image analysis
+- **Google Gemini 2.5 Flash API** - AI-powered food image analysis with JSON schema enforcement
 
 ## Development Tools
 - **ESLint** with Expo config - Code linting
@@ -56,3 +56,18 @@ npm run reset-project
 - **Android**: Edge-to-edge enabled, predictive back gesture disabled
 - **Web**: Static output with favicon support
 - **Permissions**: Camera and photo library access configured
+## A
+I Integration Best Practices
+
+### Gemini API JSON Schema Enforcement
+The food analysis service uses Gemini's `responseSchema` feature to enforce structured JSON output:
+- **Eliminates parsing errors**: Schema validation happens server-side before response is returned
+- **Reduces hallucinations**: Strict schema constraints prevent malformed or creative responses
+- **Simplifies client code**: No need for complex sanitization or fallback parsing logic
+- **Type safety**: Response structure is guaranteed to match TypeScript types
+
+When making Gemini API calls:
+1. Define JSON schema using standard JSON Schema format
+2. Set `responseMimeType: 'application/json'` in generation config
+3. Include `responseSchema` with your schema definition
+4. Trust the response structure - minimal validation needed on client side

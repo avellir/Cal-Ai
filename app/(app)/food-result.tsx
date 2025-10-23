@@ -2,20 +2,30 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
 import { getConfidenceMessage } from '@/services/foodAnalysis';
+
+type IngredientData = {
+  name: string;
+  quantity: number;
+  unit: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
 
 export default function FoodResultScreen() {
   const params = useLocalSearchParams<{
@@ -27,11 +37,18 @@ export default function FoodResultScreen() {
     servingSize: string;
     confidence: string;
     imageUri: string;
+    ingredientsData?: string;
   }>();
 
   const session = useSessionStore((state) => state.session);
   const addMeal = useMealLogStore((state) => state.addMeal);
   const [isSaving, setIsSaving] = useState(false);
+  const [showBreakdown, setShowBreakdown] = useState(false);
+
+  // Parse ingredients data if available
+  const ingredients: IngredientData[] = params.ingredientsData 
+    ? JSON.parse(params.ingredientsData) 
+    : [];
 
   const handleSave = async () => {
     if (isSaving) {
@@ -184,6 +201,50 @@ export default function FoodResultScreen() {
             {confidenceMessage}
           </Text>
         </View>
+
+        {ingredients.length > 0 && (
+          <View style={styles.breakdownSection}>
+            <Pressable 
+              style={styles.breakdownHeader}
+              onPress={() => setShowBreakdown(!showBreakdown)}
+            >
+              <View style={styles.breakdownHeaderLeft}>
+                <Feather name="list" size={20} color="#11181C" />
+                <Text style={styles.breakdownTitle}>
+                  Ingredient Breakdown ({ingredients.length})
+                </Text>
+              </View>
+              <Feather 
+                name={showBreakdown ? 'chevron-up' : 'chevron-down'} 
+                size={20} 
+                color="#6B7280" 
+              />
+            </Pressable>
+
+            {showBreakdown && (
+              <View style={styles.ingredientsList}>
+                {ingredients.map((ingredient, index) => (
+                  <View key={index} style={styles.ingredientItem}>
+                    <View style={styles.ingredientHeader}>
+                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                      <Text style={styles.ingredientQuantity}>
+                        {ingredient.quantity}{ingredient.unit}
+                      </Text>
+                    </View>
+                    <View style={styles.ingredientNutrition}>
+                      <Text style={styles.ingredientCalories}>
+                        {Math.round(ingredient.calories)} cal
+                      </Text>
+                      <Text style={styles.ingredientMacro}>P: {Math.round(ingredient.protein)}g</Text>
+                      <Text style={styles.ingredientMacro}>C: {Math.round(ingredient.carbs)}g</Text>
+                      <Text style={styles.ingredientMacro}>F: {Math.round(ingredient.fat)}g</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
@@ -405,6 +466,75 @@ const styles = StyleSheet.create({
   },
   confidenceMessageTextHigh: {
     color: '#065F46',
+  },
+  breakdownSection: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  breakdownHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  breakdownHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  breakdownTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#11181C',
+  },
+  ingredientsList: {
+    padding: 12,
+    gap: 12,
+  },
+  ingredientItem: {
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    gap: 8,
+  },
+  ingredientHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  ingredientName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#11181C',
+    flex: 1,
+    textTransform: 'capitalize',
+  },
+  ingredientQuantity: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#6B7280',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  ingredientNutrition: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingTop: 4,
+  },
+  ingredientCalories: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FF7A00',
+  },
+  ingredientMacro: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   footer: {
     flexDirection: 'row',
