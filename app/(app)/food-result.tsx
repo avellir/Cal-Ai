@@ -25,6 +25,8 @@ type IngredientData = {
   protein: number;
   carbs: number;
   fat: number;
+  wasAdjusted?: boolean;
+  adjustmentReason?: string;
 };
 
 export default function FoodResultScreen() {
@@ -38,17 +40,33 @@ export default function FoodResultScreen() {
     confidence: string;
     imageUri: string;
     ingredientsData?: string;
+    adjustments?: string;
+    warnings?: string;
   }>();
 
   const session = useSessionStore((state) => state.session);
   const addMeal = useMealLogStore((state) => state.addMeal);
   const [isSaving, setIsSaving] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
+  const [showAdjustments, setShowAdjustments] = useState(false);
 
   // Parse ingredients data if available
   const ingredients: IngredientData[] = params.ingredientsData 
     ? JSON.parse(params.ingredientsData) 
     : [];
+
+  // Parse adjustments and warnings if available
+  const adjustments: string[] = params.adjustments 
+    ? JSON.parse(params.adjustments) 
+    : [];
+  
+  const warnings: string[] = params.warnings 
+    ? JSON.parse(params.warnings) 
+    : [];
+
+  // Check if there are any adjusted ingredients
+  const hasAdjustedIngredients = ingredients.some(ing => ing.wasAdjusted);
+  const hasAdjustments = adjustments.length > 0 || hasAdjustedIngredients;
 
   const handleSave = async () => {
     if (isSaving) {
@@ -202,6 +220,61 @@ export default function FoodResultScreen() {
           </Text>
         </View>
 
+        {warnings.length > 0 && (
+          <View style={styles.warningsSection}>
+            <View style={styles.warningHeader}>
+              <Feather name="alert-triangle" size={18} color="#D97706" />
+              <Text style={styles.warningTitle}>Important Notes</Text>
+            </View>
+            {warnings.map((warning, index) => (
+              <View key={index} style={styles.warningItem}>
+                <Text style={styles.warningBullet}>•</Text>
+                <Text style={styles.warningText}>{warning}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {hasAdjustments && (
+          <View style={styles.adjustmentsSection}>
+            <Pressable 
+              style={styles.adjustmentsHeader}
+              onPress={() => setShowAdjustments(!showAdjustments)}
+            >
+              <View style={styles.adjustmentsHeaderLeft}>
+                <Feather name="edit-3" size={18} color="#6B7280" />
+                <Text style={styles.adjustmentsTitle}>
+                  Adjustments Made
+                </Text>
+              </View>
+              <Feather 
+                name={showAdjustments ? 'chevron-up' : 'chevron-down'} 
+                size={20} 
+                color="#6B7280" 
+              />
+            </Pressable>
+
+            {showAdjustments && (
+              <View style={styles.adjustmentsList}>
+                {adjustments.map((adjustment, index) => (
+                  <View key={index} style={styles.adjustmentItem}>
+                    <Text style={styles.adjustmentBullet}>•</Text>
+                    <Text style={styles.adjustmentText}>{adjustment}</Text>
+                  </View>
+                ))}
+                {hasAdjustedIngredients && (
+                  <View style={styles.adjustedIngredientsNote}>
+                    <Feather name="info" size={14} color="#6B7280" />
+                    <Text style={styles.adjustedIngredientsText}>
+                      Some ingredient portions were adjusted to realistic values
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
+          </View>
+        )}
+
         {ingredients.length > 0 && (
           <View style={styles.breakdownSection}>
             <Pressable 
@@ -224,13 +297,28 @@ export default function FoodResultScreen() {
             {showBreakdown && (
               <View style={styles.ingredientsList}>
                 {ingredients.map((ingredient, index) => (
-                  <View key={index} style={styles.ingredientItem}>
+                  <View key={index} style={[
+                    styles.ingredientItem,
+                    ingredient.wasAdjusted && styles.ingredientItemAdjusted
+                  ]}>
                     <View style={styles.ingredientHeader}>
-                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                      <View style={styles.ingredientNameContainer}>
+                        <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                        {ingredient.wasAdjusted && (
+                          <View style={styles.adjustedBadge}>
+                            <Text style={styles.adjustedBadgeText}>Adjusted</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.ingredientQuantity}>
                         {ingredient.quantity}{ingredient.unit}
                       </Text>
                     </View>
+                    {ingredient.wasAdjusted && ingredient.adjustmentReason && (
+                      <Text style={styles.adjustmentReason}>
+                        {ingredient.adjustmentReason}
+                      </Text>
+                    )}
                     <View style={styles.ingredientNutrition}>
                       <Text style={styles.ingredientCalories}>
                         {Math.round(ingredient.calories)} cal
@@ -467,6 +555,97 @@ const styles = StyleSheet.create({
   confidenceMessageTextHigh: {
     color: '#065F46',
   },
+  warningsSection: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  warningHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  warningTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#92400E',
+  },
+  warningItem: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingLeft: 4,
+  },
+  warningBullet: {
+    fontSize: 14,
+    color: '#D97706',
+    fontWeight: '600',
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#92400E',
+  },
+  adjustmentsSection: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  adjustmentsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    backgroundColor: '#F9FAFB',
+  },
+  adjustmentsHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  adjustmentsTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#11181C',
+  },
+  adjustmentsList: {
+    padding: 16,
+    gap: 10,
+  },
+  adjustmentItem: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  adjustmentBullet: {
+    fontSize: 13,
+    color: '#6B7280',
+  },
+  adjustmentText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#374151',
+  },
+  adjustedIngredientsNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    padding: 10,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+  },
+  adjustedIngredientsText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+    fontStyle: 'italic',
+  },
   breakdownSection: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -501,17 +680,45 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
+  ingredientItemAdjusted: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
   ingredientHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  ingredientNameContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   ingredientName: {
     fontSize: 15,
     fontWeight: '600',
     color: '#11181C',
-    flex: 1,
     textTransform: 'capitalize',
+  },
+  adjustedBadge: {
+    backgroundColor: '#D97706',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adjustedBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    textTransform: 'uppercase',
+  },
+  adjustmentReason: {
+    fontSize: 12,
+    color: '#92400E',
+    fontStyle: 'italic',
+    marginTop: 2,
   },
   ingredientQuantity: {
     fontSize: 13,

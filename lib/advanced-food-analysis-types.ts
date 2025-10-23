@@ -16,7 +16,6 @@
  * Food region identified in segmentation stage
  */
 export type FoodRegion = {
-  regionId: string;
   description: string; // e.g., "main protein on left side of plate"
   boundingBox?: {
     x: number;
@@ -41,6 +40,19 @@ export type SegmentationResult = {
 // ============================================================================
 
 /**
+ * Food category for portion validation
+ */
+export type FoodCategory = 
+  | 'protein' 
+  | 'grain' 
+  | 'vegetable' 
+  | 'fruit' 
+  | 'dairy' 
+  | 'fat' 
+  | 'condiment' 
+  | 'spread';
+
+/**
  * Individual ingredient with quantity and metadata
  */
 export type Ingredient = {
@@ -48,8 +60,11 @@ export type Ingredient = {
   quantity: number; // numeric value
   unit: string; // e.g., "g", "ml", "oz"
   preparation?: string; // e.g., "grilled", "fried"
-  regionId: string; // which food region this belongs to
   confidence: number;
+  // Validation metadata (added by portion validation)
+  category?: FoodCategory; // Food category for portion validation
+  wasAdjusted?: boolean; // Whether portion was adjusted
+  adjustmentReason?: string; // Reason for adjustment
 };
 
 /**
@@ -90,6 +105,15 @@ export type EnrichedIngredient = Ingredient & {
     carbs: number;
     fat: number;
   };
+  // Additional fields for compatibility with calculation module
+  nutritionPer100g?: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  servingSize?: number;
+  source?: 'fatsecret' | 'usda' | 'generic' | 'estimated';
 };
 
 // ============================================================================
@@ -111,6 +135,8 @@ export type AdvancedAnalysisResult = {
     ingredients: EnrichedIngredient[];
     regions: FoodRegion[];
     confidence: number;
+    warnings?: string[]; // User-facing warnings about the analysis
+    adjustments?: string[]; // Log of adjustments made during analysis
   };
   error?: string;
   metadata?: {
@@ -135,7 +161,6 @@ export function isFoodRegion(value: unknown): value is FoodRegion {
   const region = value as Record<string, unknown>;
 
   return (
-    typeof region.regionId === 'string' &&
     typeof region.description === 'string' &&
     typeof region.confidence === 'number' &&
     region.confidence >= 0 &&
@@ -187,7 +212,6 @@ export function isIngredient(value: unknown): value is Ingredient {
     ingredient.quantity >= 0 &&
     typeof ingredient.unit === 'string' &&
     ingredient.unit.length > 0 &&
-    typeof ingredient.regionId === 'string' &&
     typeof ingredient.confidence === 'number' &&
     ingredient.confidence >= 0 &&
     ingredient.confidence <= 100 &&

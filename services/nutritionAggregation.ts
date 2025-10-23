@@ -7,7 +7,7 @@
  * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.4
  */
 
-import type { EnrichedIngredient, FoodRegion } from '@/lib/advanced-food-analysis-types';
+import type { EnrichedIngredient } from '@/lib/advanced-food-analysis-types';
 
 // ============================================================================
 // Task 6.1: Nutrition Aggregation Logic
@@ -111,7 +111,6 @@ export type IngredientBreakdown = {
   quantity: number;
   unit: string;
   preparation?: string;
-  regionId: string;
   confidence: number;
   nutrition: {
     calories: number;
@@ -132,7 +131,6 @@ export type IngredientBreakdown = {
  * Ingredients grouped by food region
  */
 export type RegionBreakdown = {
-  regionId: string;
   regionDescription: string;
   ingredients: IngredientBreakdown[];
   regionTotals: {
@@ -149,17 +147,14 @@ export type RegionBreakdown = {
  * Implements requirements:
  * - 4.5: Provide breakdown showing each ingredient's contribution
  * - 5.1: Return list of all identified ingredients with quantities
- * - 5.2: Indicate which food region each ingredient belongs to
  * - 5.4: Use user-friendly units alongside metric measurements
  * 
  * @param enrichedIngredients - Array of ingredients with nutrition data
- * @param regions - Food regions from segmentation
  * @param totalNutrition - Total nutrition for calculating percentages
- * @returns Array of ingredients grouped by region with contribution data
+ * @returns Array with single breakdown containing all ingredients with contribution data
  */
 export function generateIngredientBreakdown(
   enrichedIngredients: EnrichedIngredient[],
-  regions: FoodRegion[],
   totalNutrition: {
     calories: number;
     protein: number;
@@ -167,68 +162,45 @@ export function generateIngredientBreakdown(
     fat: number;
   }
 ): RegionBreakdown[] {
-  // Group ingredients by region
-  const ingredientsByRegion = new Map<string, EnrichedIngredient[]>();
-  
-  for (const ingredient of enrichedIngredients) {
-    const regionIngredients = ingredientsByRegion.get(ingredient.regionId) || [];
-    regionIngredients.push(ingredient);
-    ingredientsByRegion.set(ingredient.regionId, regionIngredients);
-  }
+  // Calculate totals for all ingredients
+  const regionTotals = enrichedIngredients.reduce(
+    (acc, ing) => ({
+      calories: acc.calories + ing.scaledNutrition.calories,
+      protein: acc.protein + ing.scaledNutrition.protein,
+      carbs: acc.carbs + ing.scaledNutrition.carbs,
+      fat: acc.fat + ing.scaledNutrition.fat,
+    }),
+    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+  );
 
-  // Create breakdown for each region
-  const regionBreakdowns: RegionBreakdown[] = [];
+  // Format each ingredient with contribution percentages
+  const formattedIngredients: IngredientBreakdown[] = enrichedIngredients.map(ingredient => {
+    const contribution = calculateContribution(ingredient, totalNutrition);
+    const displayQuantity = formatDisplayQuantity(ingredient.quantity, ingredient.unit);
 
-  for (const region of regions) {
-    const regionIngredients = ingredientsByRegion.get(region.regionId) || [];
-    
-    if (regionIngredients.length === 0) {
-      continue; // Skip regions with no ingredients
-    }
+    return {
+      name: ingredient.name,
+      quantity: ingredient.quantity,
+      unit: ingredient.unit,
+      preparation: ingredient.preparation,
+      confidence: ingredient.confidence,
+      nutrition: {
+        calories: ingredient.scaledNutrition.calories,
+        protein: ingredient.scaledNutrition.protein,
+        carbs: ingredient.scaledNutrition.carbs,
+        fat: ingredient.scaledNutrition.fat,
+      },
+      contribution,
+      displayQuantity,
+    };
+  });
 
-    // Calculate region totals
-    const regionTotals = regionIngredients.reduce(
-      (acc, ing) => ({
-        calories: acc.calories + ing.scaledNutrition.calories,
-        protein: acc.protein + ing.scaledNutrition.protein,
-        carbs: acc.carbs + ing.scaledNutrition.carbs,
-        fat: acc.fat + ing.scaledNutrition.fat,
-      }),
-      { calories: 0, protein: 0, carbs: 0, fat: 0 }
-    );
-
-    // Format each ingredient with contribution percentages
-    const formattedIngredients: IngredientBreakdown[] = regionIngredients.map(ingredient => {
-      const contribution = calculateContribution(ingredient, totalNutrition);
-      const displayQuantity = formatDisplayQuantity(ingredient.quantity, ingredient.unit);
-
-      return {
-        name: ingredient.name,
-        quantity: ingredient.quantity,
-        unit: ingredient.unit,
-        preparation: ingredient.preparation,
-        regionId: ingredient.regionId,
-        confidence: ingredient.confidence,
-        nutrition: {
-          calories: ingredient.scaledNutrition.calories,
-          protein: ingredient.scaledNutrition.protein,
-          carbs: ingredient.scaledNutrition.carbs,
-          fat: ingredient.scaledNutrition.fat,
-        },
-        contribution,
-        displayQuantity,
-      };
-    });
-
-    regionBreakdowns.push({
-      regionId: region.regionId,
-      regionDescription: region.description,
-      ingredients: formattedIngredients,
-      regionTotals,
-    });
-  }
-
-  return regionBreakdowns;
+  // Return single breakdown for all ingredients
+  return [{
+    regionDescription: 'All ingredients',
+    ingredients: formattedIngredients,
+    regionTotals,
+  }];
 }
 
 /**

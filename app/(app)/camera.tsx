@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import type { EnrichedIngredient } from '@/lib/advanced-food-analysis-types';
 import { analyzeAdvancedFoodImage } from '@/services/foodAnalysis';
 
 export default function CameraScreen() {
@@ -79,43 +78,23 @@ export default function CameraScreen() {
       setIsAnalyzing(false);
 
       if (result.success && result.data) {
-        // Generate food name from ingredients
-        const foodName = result.data.ingredients
-          .slice(0, 3)
-          .map((ing: EnrichedIngredient) => ing.name)
-          .join(', ');
-        
-        // Generate serving size description
-        const totalWeight = result.data.ingredients.reduce((sum: number, ing: EnrichedIngredient) => {
-          const grams = ing.unit === 'g' ? ing.quantity : 
-                       ing.unit === 'ml' ? ing.quantity :
-                       ing.unit === 'oz' ? ing.quantity * 28.35 : 100;
-          return sum + grams;
-        }, 0);
-        const servingSize = `${Math.round(totalWeight)}g total (${result.data.ingredients.length} ingredients)`;
+        // Use the simplified nutrition data structure
+        const foodName = result.data.foodName;
+        const servingSize = result.data.servingSize;
 
         // Navigate to results screen with nutrition data
         router.push({
           pathname: '/(app)/food-result',
           params: {
             foodName,
-            calories: result.data.totalNutrition.calories.toString(),
-            protein: result.data.totalNutrition.protein.toString(),
-            carbs: result.data.totalNutrition.carbs.toString(),
-            fat: result.data.totalNutrition.fat.toString(),
+            calories: result.data.calories.toString(),
+            protein: result.data.protein.toString(),
+            carbs: result.data.carbs.toString(),
+            fat: result.data.fat.toString(),
             servingSize,
             confidence: result.data.confidence.toString(),
             imageUri,
-            // Pass serialized ingredient data for breakdown display
-            ingredientsData: JSON.stringify(result.data.ingredients.map((ing: EnrichedIngredient) => ({
-              name: ing.name,
-              quantity: ing.quantity,
-              unit: ing.unit,
-              calories: ing.scaledNutrition.calories,
-              protein: ing.scaledNutrition.protein,
-              carbs: ing.scaledNutrition.carbs,
-              fat: ing.scaledNutrition.fat,
-            }))),
+            reasoning: result.data.reasoning || '',
           },
         });
       } else {

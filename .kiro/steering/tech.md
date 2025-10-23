@@ -11,7 +11,7 @@
 - **Zustand** - Lightweight state management
 - **React Query** - Server state management and caching
 - **Expo Camera & Image Picker** - Camera functionality and photo selection
-- **Google Gemini 2.5 Flash API** - AI-powered food image analysis with JSON schema enforcement
+- **Perplexity AI API** - AI-powered food image analysis with vision capabilities
 
 ## Development Tools
 - **ESLint** with Expo config - Code linting
@@ -49,25 +49,29 @@ npm run reset-project
 - Use `.env` file for environment variables
 - Prefix public variables with `EXPO_PUBLIC_`
 - Supabase config can be set via environment variables or `app.json` extra field
-- Required: `EXPO_PUBLIC_GOOGLE_GEMINI_API_KEY` for AI food analysis
+- Required: `EXPO_PUBLIC_Perplexity_API_KEY` for AI food analysis
 
 ## Build Configuration
 - **iOS**: Supports tablets, uses adaptive icons
 - **Android**: Edge-to-edge enabled, predictive back gesture disabled
 - **Web**: Static output with favicon support
 - **Permissions**: Camera and photo library access configured
-## A
-I Integration Best Practices
+## AI Integration Best Practices
 
-### Gemini API JSON Schema Enforcement
-The food analysis service uses Gemini's `responseSchema` feature to enforce structured JSON output:
-- **Eliminates parsing errors**: Schema validation happens server-side before response is returned
-- **Reduces hallucinations**: Strict schema constraints prevent malformed or creative responses
-- **Simplifies client code**: No need for complex sanitization or fallback parsing logic
-- **Type safety**: Response structure is guaranteed to match TypeScript types
+### Perplexity AI Vision API
+The food analysis service uses Perplexity's vision-capable models for food image analysis:
+- **Vision support**: Models can analyze images alongside text prompts
+- **Structured output**: Prompts are designed to return JSON responses
+- **Fallback parsing**: Client-side sanitization handles edge cases
+- **Model flexibility**: Default model is `llama-3.1-sonar-large-128k-chat`
 
-When making Gemini API calls:
-1. Define JSON schema using standard JSON Schema format
-2. Set `responseMimeType: 'application/json'` in generation config
-3. Include `responseSchema` with your schema definition
-4. Trust the response structure - minimal validation needed on client side
+Available vision models:
+- `llama-3.1-sonar-small-128k-chat` - Faster, more economical
+- `llama-3.1-sonar-large-128k-chat` - Balanced performance (default)
+- `llama-3.1-sonar-huge-128k-chat` - Highest accuracy
+
+When making Perplexity API calls:
+1. Use the chat completions endpoint with multimodal content
+2. Include both text prompts and base64-encoded images
+3. Set appropriate temperature and max_tokens for consistent output
+4. Implement response sanitization to handle markdown code blocks

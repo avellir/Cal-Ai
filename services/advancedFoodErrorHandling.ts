@@ -385,7 +385,6 @@ export async function withErrorHandling<T>(
  */
 export function handleSegmentationError(error: unknown): {
   regions: Array<{
-    regionId: string;
     description: string;
     confidence: number;
   }>;
@@ -401,7 +400,6 @@ export function handleSegmentationError(error: unknown): {
     console.warn('Segmentation failed, treating entire image as single region');
     return {
       regions: [{
-        regionId: 'region_1',
         description: 'Entire image (segmentation failed)',
         confidence: 40,
       }],
@@ -424,32 +422,29 @@ export function handleSegmentationError(error: unknown): {
  * Handles errors during ingredient decomposition stage
  * 
  * @param error - Error that occurred
- * @param regionId - Region ID that failed
+ * @param regionDescription - Description of the region that failed
  * @returns Fallback ingredient or null
  */
 export function handleDecompositionError(
   error: unknown,
-  regionId: string,
   regionDescription: string
 ): {
   name: string;
   quantity: number;
   unit: string;
-  regionId: string;
   confidence: number;
 } | null {
-  console.error(`Decomposition error for region ${regionId}:`, error);
+  console.error(`Decomposition error for region:`, error);
 
   const category = classifyError(error);
 
   // For parsing errors, provide a fallback ingredient
   if (category === ErrorCategory.PARSING) {
-    console.warn(`Decomposition failed for region ${regionId}, using fallback`);
+    console.warn(`Decomposition failed for region, using fallback`);
     return {
       name: regionDescription || 'unknown food',
       quantity: 100,
       unit: 'g',
-      regionId,
       confidence: 30,
     };
   }
@@ -464,7 +459,6 @@ export function handleDecompositionError(
     name: regionDescription || 'unknown food',
     quantity: 100,
     unit: 'g',
-    regionId,
     confidence: 30,
   };
 }

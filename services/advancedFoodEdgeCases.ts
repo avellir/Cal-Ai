@@ -8,10 +8,10 @@
  */
 
 import type {
-    AdvancedAnalysisResult,
-    FoodRegion,
-    Ingredient,
-    SegmentationResult,
+  AdvancedAnalysisResult,
+  FoodRegion,
+  Ingredient,
+  SegmentationResult,
 } from '@/lib/advanced-food-analysis-types';
 
 // ============================================================================
@@ -179,7 +179,6 @@ export function detectSingleIngredient(segmentation: SegmentationResult): EdgeCa
       reason: `Single whole ingredient detected: ${region.description}`,
       metadata: {
         ingredientName: region.description,
-        regionId: region.regionId,
       },
     };
   }
@@ -261,7 +260,6 @@ export function detectPackagedFoodLabel(segmentation: SegmentationResult): EdgeC
         confidence: 75,
         reason: `Nutrition label or package detected: ${region.description}`,
         metadata: {
-          regionId: region.regionId,
           description: region.description,
         },
       };
@@ -342,7 +340,7 @@ export function detectBeverage(segmentation: SegmentationResult): EdgeCaseDetect
       confidence: 80,
       reason: `All regions are beverages: ${beverageRegions.map(r => r.description).join(', ')}`,
       metadata: {
-        beverageRegions: beverageRegions.map(r => r.regionId),
+        beverageRegions: beverageRegions.map(r => r.description),
       },
     };
   }
@@ -354,7 +352,7 @@ export function detectBeverage(segmentation: SegmentationResult): EdgeCaseDetect
       confidence: 60,
       reason: `Some regions contain beverages: ${beverageRegions.map(r => r.description).join(', ')}`,
       metadata: {
-        beverageRegions: beverageRegions.map(r => r.regionId),
+        beverageRegions: beverageRegions.map(r => r.description),
         hasSolidFood: true,
       },
     };
@@ -441,7 +439,6 @@ export function detectComplexMixedDish(segmentation: SegmentationResult): EdgeCa
         confidence: 75,
         reason: `Complex mixed dish detected: ${region.description}`,
         metadata: {
-          regionId: region.regionId,
           description: region.description,
         },
       };
@@ -585,12 +582,10 @@ export function detectEdgeCases(segmentation: SegmentationResult): EdgeCaseDetec
  * Requirement 10.2: Extract nutritional information from labels
  * 
  * @param base64Image - Base64 encoded image data
- * @param region - Food region containing the label
  * @returns AdvancedAnalysisResult with extracted nutrition data
  */
 export async function extractNutritionFromLabel(
-  base64Image: string,
-  region: FoodRegion
+  base64Image: string
 ): Promise<AdvancedAnalysisResult> {
   const startTime = Date.now();
 
@@ -703,7 +698,6 @@ Return JSON with extracted nutrition data.`;
       name: extracted.productName || 'Packaged food',
       quantity: 1,
       unit: 'serving',
-      regionId: region.regionId,
       confidence: extracted.confidence,
       nutrition: {
         foodId: 'label_extracted',

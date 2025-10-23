@@ -768,6 +768,99 @@ function normalizeCacheKey(name: string): string {
 }
 
 // ============================================================================
+// Ingredient Name Normalization
+// ============================================================================
+
+/**
+ * Normalizes ingredient names for better FatSecret API compatibility
+ * Removes preparation methods, standardizes common terms, and handles regional variations
+ * 
+ * Requirements: 4.1, 4.3
+ * 
+ * @param ingredientName - Raw ingredient name from AI analysis
+ * @returns Normalized ingredient name optimized for FatSecret search
+ */
+export function normalizeIngredientName(ingredientName: string): string {
+  let normalized = ingredientName.toLowerCase().trim();
+  
+  // Remove common preparation methods (Requirement 4.1)
+  const preparationMethods = [
+    'grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled',
+    'sauteed', 'sautéed', 'pan-fried', 'deep-fried', 'stir-fried',
+    'raw', 'cooked', 'fresh', 'frozen', 'canned', 'dried',
+    'marinated', 'seasoned', 'breaded', 'crispy', 'tender',
+    'sliced', 'diced', 'chopped', 'minced', 'shredded', 'whole'
+  ];
+  
+  for (const method of preparationMethods) {
+    // Remove as standalone word or with comma
+    normalized = normalized.replace(new RegExp(`\\b${method}\\b,?\\s*`, 'gi'), '');
+  }
+  
+  // Handle regional variations and common substitutions (Requirement 4.3)
+  const substitutions: Record<string, string> = {
+    'capsicum': 'bell pepper',
+    'aubergine': 'eggplant',
+    'courgette': 'zucchini',
+    'coriander': 'cilantro',
+    'rocket': 'arugula',
+    'spring onion': 'green onion',
+    'scallion': 'green onion',
+    'prawn': 'shrimp',
+    'mince': 'ground beef',
+    'minced beef': 'ground beef',
+    'minced chicken': 'ground chicken',
+    'sweetcorn': 'corn',
+    'tinned': 'canned',
+  };
+  
+  for (const [from, to] of Object.entries(substitutions)) {
+    normalized = normalized.replace(new RegExp(`\\b${from}\\b`, 'gi'), to);
+  }
+  
+  // Remove extra descriptors that don't help search
+  const descriptorsToRemove = [
+    'organic', 'free-range', 'grass-fed', 'wild-caught',
+    'extra virgin', 'virgin', 'refined', 'unrefined',
+    'low-fat', 'fat-free', 'reduced-fat', 'full-fat',
+    'unsalted', 'salted', 'sweetened', 'unsweetened',
+    'plain', 'natural', 'pure'
+  ];
+  
+  for (const descriptor of descriptorsToRemove) {
+    normalized = normalized.replace(new RegExp(`\\b${descriptor}\\b,?\\s*`, 'gi'), '');
+  }
+  
+  // Standardize common food names for better FatSecret matching
+  const standardizations: Record<string, string> = {
+    'chicken breast fillet': 'chicken breast',
+    'chicken thigh fillet': 'chicken thigh',
+    'beef steak': 'beef',
+    'pork chop': 'pork',
+    'salmon fillet': 'salmon',
+    'white bread': 'bread',
+    'brown bread': 'whole wheat bread',
+    'jasmine rice': 'white rice',
+    'basmati rice': 'white rice',
+  };
+  
+  for (const [from, to] of Object.entries(standardizations)) {
+    if (normalized.includes(from)) {
+      normalized = to;
+      break;
+    }
+  }
+  
+  // Clean up extra spaces and punctuation
+  normalized = normalized
+    .replace(/\s+/g, ' ')
+    .replace(/[,;]+/g, '')
+    .trim();
+  
+  return normalized;
+}
+
+// ============================================================================
 // Food Search and Lookup (Stage 3)
 // ============================================================================
 
@@ -775,28 +868,35 @@ function normalizeCacheKey(name: string): string {
  * Searches FatSecret database for a food item by name
  * Returns the food ID of the most relevant match, or null if not found
  * Uses caching to reduce redundant API calls
+ * Applies ingredient name normalization for better search results
  * 
- * Requirements: 3.1, 3.2, 3.4, 3.5, 8.2
+ * Requirements: 3.1, 3.2, 3.4, 3.5, 4.1, 4.3, 8.2
  * 
  * @param ingredientName - Name of the ingredient to search for
  * @param maxResults - Maximum number of results to return (default: 5)
+ * @param skipNormalization - Skip name normalization (default: false)
  * @returns FatSecret food ID of the best match, or null if not found
  */
 export async function searchFatSecretFood(
   ingredientName: string,
-  maxResults: number = 5
+  maxResults: number = 5,
+  skipNormalization: boolean = false
 ): Promise<string | null> {
+  // Normalize ingredient name for better FatSecret compatibility (Requirement 4.1)
+  const searchName = skipNormalization ? ingredientName : normalizeIngredientName(ingredientName);
+  
   // Check cache first
-  const cacheKey = normalizeCacheKey(ingredientName);
+  const cacheKey = normalizeCacheKey(searchName);
   const cachedResult = ingredientSearchCache.get(cacheKey);
   
   if (cachedResult !== undefined) {
-    console.log(`Cache hit for "${ingredientName}"`);
+    console.log(`Cache hit for "${ingredientName}" (normalized: "${searchName}")`);
     return cachedResult;
   }
+  
   try {
     const response = await makeFatSecretRequest('foods.search', {
-      search_expression: ingredientName,
+      search_expression: searchName,
       max_results: maxResults.toString(),
     });
 
@@ -804,7 +904,7 @@ export async function searchFatSecretFood(
     const data = response as { foods?: { food?: unknown[] | unknown } };
     
     if (!data.foods) {
-      console.warn(`No foods found for "${ingredientName}"`);
+      console.warn(`No foods found for "${ingredientName}" (searched: "${searchName}")`);
       // Cache negative result to avoid repeated failed searches
       ingredientSearchCache.set(cacheKey, null);
       return null;
@@ -818,22 +918,26 @@ export async function searchFatSecretFood(
         : [];
 
     if (foods.length === 0) {
-      console.warn(`No foods found for "${ingredientName}"`);
+      console.warn(`No foods found for "${ingredientName}" (searched: "${searchName}")`);
       // Cache negative result
       ingredientSearchCache.set(cacheKey, null);
       return null;
     }
 
     // Return the first (most relevant) food ID
-    const firstFood = foods[0] as { food_id?: string };
+    const firstFood = foods[0] as { food_id?: string; food_name?: string };
     const foodId = firstFood.food_id || null;
+    
+    if (foodId) {
+      console.log(`Found FatSecret match for "${ingredientName}": ${firstFood.food_name || foodId}`);
+    }
     
     // Cache the result
     ingredientSearchCache.set(cacheKey, foodId);
     
     return foodId;
   } catch (error) {
-    console.error(`FatSecret search failed for "${ingredientName}":`, error);
+    console.error(`FatSecret search failed for "${ingredientName}" (searched: "${searchName}"):`, error);
     // Don't cache errors - allow retry on next attempt
     return null;
   }
@@ -842,12 +946,13 @@ export async function searchFatSecretFood(
 /**
  * Searches for a food item with alternative search terms
  * Tries multiple variations to improve match rate:
- * 1. Exact name
- * 2. Name with preparation method
- * 3. Name without preparation method
+ * 1. Normalized name (with preparation methods removed)
+ * 2. Original name
+ * 3. Broader search terms (e.g., "chicken breast" → "chicken")
+ * 4. Plural/singular variations
  * Uses caching to reduce redundant searches
  * 
- * Requirements: 3.2, 3.4, 3.5, 8.2
+ * Requirements: 3.2, 3.4, 3.5, 4.1, 4.3, 8.2
  * 
  * @param ingredientName - Base ingredient name
  * @param preparation - Optional preparation method (e.g., "grilled", "fried")
@@ -869,31 +974,49 @@ export async function searchFatSecretFoodWithAlternatives(
     return cachedCompositeResult;
   }
 
-  // Try exact name first
-  let foodId = await searchFatSecretFood(ingredientName);
+  // Try normalized name first (best chance of success) (Requirement 4.1)
+  let foodId = await searchFatSecretFood(ingredientName, 5, false);
   if (foodId) {
-    // Cache the composite result
     ingredientSearchCache.set(compositeCacheKey, foodId);
     return foodId;
   }
 
-  // Try with preparation method if provided
-  if (preparation) {
-    const withPreparation = `${ingredientName} ${preparation}`;
-    foodId = await searchFatSecretFood(withPreparation);
+  // Try original name without normalization
+  const normalizedName = normalizeIngredientName(ingredientName);
+  if (normalizedName !== ingredientName.toLowerCase().trim()) {
+    foodId = await searchFatSecretFood(ingredientName, 5, true);
     if (foodId) {
       ingredientSearchCache.set(compositeCacheKey, foodId);
       return foodId;
     }
+  }
 
-    // Try removing preparation from the name if it's already included
-    const withoutPreparation = ingredientName
-      .replace(new RegExp(preparation, 'gi'), '')
-      .trim();
+  // Try with preparation method if provided
+  if (preparation) {
+    const withPreparation = `${normalizedName} ${preparation}`;
+    foodId = await searchFatSecretFood(withPreparation, 5, true);
+    if (foodId) {
+      ingredientSearchCache.set(compositeCacheKey, foodId);
+      return foodId;
+    }
+  }
+
+  // Try broader search terms (e.g., "chicken breast" → "chicken") (Requirement 4.3)
+  const words = normalizedName.split(' ');
+  if (words.length > 1) {
+    // Try first word only (often the main ingredient)
+    foodId = await searchFatSecretFood(words[0], 5, true);
+    if (foodId) {
+      console.log(`Found match using broader term "${words[0]}" for "${ingredientName}"`);
+      ingredientSearchCache.set(compositeCacheKey, foodId);
+      return foodId;
+    }
     
-    if (withoutPreparation !== ingredientName) {
-      foodId = await searchFatSecretFood(withoutPreparation);
+    // Try last word (sometimes more specific)
+    if (words.length > 2) {
+      foodId = await searchFatSecretFood(words[words.length - 1], 5, true);
       if (foodId) {
+        console.log(`Found match using last word "${words[words.length - 1]}" for "${ingredientName}"`);
         ingredientSearchCache.set(compositeCacheKey, foodId);
         return foodId;
       }
@@ -902,15 +1025,16 @@ export async function searchFatSecretFoodWithAlternatives(
 
   // Try common variations
   const variations = [
-    ingredientName.replace(/s$/, ''), // Remove plural
-    ingredientName + 's', // Add plural
-    ingredientName.replace(/\b(raw|cooked|fresh)\b/gi, '').trim(), // Remove common modifiers
+    normalizedName.replace(/s$/, ''), // Remove plural
+    normalizedName + 's', // Add plural
+    normalizedName.replace(/\b(raw|cooked|fresh|frozen)\b/gi, '').trim(), // Remove state modifiers
   ];
 
   for (const variation of variations) {
-    if (variation !== ingredientName && variation.length > 0) {
-      foodId = await searchFatSecretFood(variation);
+    if (variation !== normalizedName && variation.length > 2) {
+      foodId = await searchFatSecretFood(variation, 5, true);
       if (foodId) {
+        console.log(`Found match using variation "${variation}" for "${ingredientName}"`);
         ingredientSearchCache.set(compositeCacheKey, foodId);
         return foodId;
       }
@@ -918,6 +1042,7 @@ export async function searchFatSecretFoodWithAlternatives(
   }
 
   // Cache the negative result for the composite search
+  console.warn(`All search alternatives exhausted for "${ingredientName}"`);
   ingredientSearchCache.set(compositeCacheKey, null);
   return null;
 }
@@ -1159,6 +1284,17 @@ const USDA_DATABASE: Record<string, {
   'mayonnaise': { calories: 680, protein: 1, carbs: 0.6, fat: 75 },
   'mustard': { calories: 66, protein: 4, carbs: 6, fat: 4 },
   'hot sauce': { calories: 12, protein: 0.9, carbs: 2.1, fat: 0.3 },
+  'hummus': { calories: 166, protein: 8, carbs: 14, fat: 10 },
+  'guacamole': { calories: 150, protein: 2, carbs: 9, fat: 13 },
+  'salsa': { calories: 36, protein: 1.5, carbs: 7, fat: 0.2 },
+  'ranch dressing': { calories: 458, protein: 1.4, carbs: 5.5, fat: 48 },
+  'caesar dressing': { calories: 420, protein: 2.5, carbs: 4, fat: 44 },
+  'vinaigrette': { calories: 267, protein: 0.1, carbs: 6, fat: 28 },
+  'bbq sauce': { calories: 172, protein: 1, carbs: 41, fat: 0.5 },
+  'teriyaki sauce': { calories: 89, protein: 5.7, carbs: 15, fat: 0.1 },
+  'pesto': { calories: 420, protein: 5, carbs: 5, fat: 42 },
+  'tahini': { calories: 595, protein: 17, carbs: 21, fat: 54 },
+  'cream cheese': { calories: 342, protein: 6, carbs: 5.5, fat: 34 },
   
   // Nuts & Seeds
   'almond': { calories: 579, protein: 21, carbs: 22, fat: 50 },
@@ -1386,11 +1522,12 @@ export function calculateScaleFactor(
 
 /**
  * Looks up nutritional information for an ingredient with fallback chain
+ * Implements FatSecret → USDA fallback strategy with confidence tracking
  * 
- * Requirements: 2.2, 3.2, 3.3, 4.1
+ * Requirements: 2.2, 3.2, 3.3, 4.1, 4.2, 4.3, 4.4, 4.5
  * 
  * @param ingredient - Ingredient object with name, quantity, unit, and optional preparation
- * @returns Enriched ingredient with nutrition data or null if lookup fails
+ * @returns Enriched ingredient with nutrition data and confidence penalty
  */
 export async function lookupIngredientNutrition(
   ingredient: {
@@ -1414,28 +1551,30 @@ export async function lookupIngredientNutrition(
     carbs: number;
     fat: number;
   };
+  source: 'fatsecret' | 'usda' | 'generic';
+  confidencePenalty: number;
   isUSDAFallback?: boolean;
 } | null> {
   try {
-    // Try FatSecret search with alternatives
+    // Try FatSecret search with alternatives (Requirement 4.1, 4.3)
     const foodId = await searchFatSecretFoodWithAlternatives(
       ingredient.name,
       ingredient.preparation
     );
     
     if (foodId) {
-      // Get nutrition data from FatSecret
+      // Get nutrition data from FatSecret (Requirement 4.1)
       const nutrition = await getFatSecretNutrition(foodId);
       
       if (nutrition) {
-        // Calculate scale factor
+        // Calculate scale factor (Requirement 4.4)
         const scaleFactor = calculateScaleFactor(
           ingredient.quantity,
           ingredient.unit,
           nutrition.servingSize
         );
         
-        // Scale nutrition values
+        // Scale nutrition values (Requirement 4.4)
         const scaledNutrition = {
           calories: Math.round(nutrition.calories * scaleFactor),
           protein: Math.round(nutrition.protein * scaleFactor * 10) / 10,
@@ -1443,17 +1582,28 @@ export async function lookupIngredientNutrition(
           fat: Math.round(nutrition.fat * scaleFactor * 10) / 10,
         };
         
+        console.log(`✓ FatSecret data used for "${ingredient.name}"`);
+        
         return {
           ...nutrition,
           scaledNutrition,
+          source: 'fatsecret',
+          confidencePenalty: 0, // No penalty for FatSecret data
         };
       }
     }
     
-    // Fallback to USDA if FatSecret fails
-    console.warn(`FatSecret lookup failed for "${ingredient.name}", using USDA fallback`);
+    // Fallback to USDA if FatSecret fails (Requirement 4.2, 4.5)
+    console.warn(`⚠ FatSecret lookup failed for "${ingredient.name}", using USDA fallback`);
     const ingredientGrams = convertToGrams(ingredient.quantity, ingredient.unit);
     const usdaData = getUSDAFallback(ingredient.name, ingredientGrams);
+    
+    // Determine confidence penalty based on fallback type (Requirement 4.5)
+    const hasUSDAMatch = hasUSDAData(ingredient.name);
+    const confidencePenalty = hasUSDAMatch ? 10 : 20; // Lower penalty for known USDA foods
+    const source = hasUSDAMatch ? 'usda' : 'generic';
+    
+    console.log(`→ Using ${source} fallback with ${confidencePenalty}% confidence penalty`);
     
     return {
       ...usdaData,
@@ -1463,13 +1613,21 @@ export async function lookupIngredientNutrition(
         carbs: usdaData.carbs,
         fat: usdaData.fat,
       },
+      source,
+      confidencePenalty,
     };
   } catch (error) {
-    console.error(`Ingredient nutrition lookup failed for "${ingredient.name}":`, error);
+    // Last resort: USDA fallback with error handling (Requirement 4.5)
+    console.error(`✗ Ingredient nutrition lookup failed for "${ingredient.name}":`, error);
     
-    // Last resort: USDA fallback
     const ingredientGrams = convertToGrams(ingredient.quantity, ingredient.unit);
     const usdaData = getUSDAFallback(ingredient.name, ingredientGrams);
+    
+    const hasUSDAMatch = hasUSDAData(ingredient.name);
+    const confidencePenalty = hasUSDAMatch ? 15 : 25; // Higher penalty due to error
+    const source = hasUSDAMatch ? 'usda' : 'generic';
+    
+    console.log(`→ Error recovery using ${source} fallback with ${confidencePenalty}% confidence penalty`);
     
     return {
       ...usdaData,
@@ -1479,6 +1637,8 @@ export async function lookupIngredientNutrition(
         carbs: usdaData.carbs,
         fat: usdaData.fat,
       },
+      source,
+      confidencePenalty,
     };
   }
 }
@@ -1490,12 +1650,13 @@ export async function lookupIngredientNutrition(
 /**
  * Looks up nutritional information for multiple ingredients in batches
  * Processes ingredients in groups to manage rate limiting and improve performance
+ * Tracks confidence penalties from fallback usage
  * 
- * Requirements: 3.5, 8.3
+ * Requirements: 3.5, 4.2, 4.5, 8.3
  * 
  * @param ingredients - Array of ingredients to look up
  * @param batchSize - Number of ingredients to process concurrently (default: 5)
- * @returns Array of enriched ingredients with nutrition data
+ * @returns Array of enriched ingredients with nutrition data and confidence penalties
  */
 export async function batchLookupNutrition(
   ingredients: Array<{
@@ -1503,7 +1664,6 @@ export async function batchLookupNutrition(
     quantity: number;
     unit: string;
     preparation?: string;
-    regionId: string;
     confidence: number;
   }>,
   batchSize: number = 5
@@ -1512,7 +1672,6 @@ export async function batchLookupNutrition(
   quantity: number;
   unit: string;
   preparation?: string;
-  regionId: string;
   confidence: number;
   nutrition: {
     foodId: string;
@@ -1530,6 +1689,8 @@ export async function batchLookupNutrition(
     carbs: number;
     fat: number;
   };
+  source: 'fatsecret' | 'usda' | 'generic';
+  confidencePenalty: number;
   isUSDAFallback?: boolean;
 }>> {
   const enrichedIngredients: Array<{
@@ -1537,7 +1698,6 @@ export async function batchLookupNutrition(
     quantity: number;
     unit: string;
     preparation?: string;
-    regionId: string;
     confidence: number;
     nutrition: {
       foodId: string;
@@ -1555,6 +1715,8 @@ export async function batchLookupNutrition(
       carbs: number;
       fat: number;
     };
+    source: 'fatsecret' | 'usda' | 'generic';
+    confidencePenalty: number;
     isUSDAFallback?: boolean;
   }> = [];
 
@@ -1586,6 +1748,8 @@ export async function batchLookupNutrition(
             servingUnit: nutrition.servingUnit,
           },
           scaledNutrition: nutrition.scaledNutrition,
+          source: nutrition.source,
+          confidencePenalty: nutrition.confidencePenalty,
           isUSDAFallback: nutrition.isUSDAFallback,
         };
       })
@@ -1610,6 +1774,7 @@ export async function batchLookupNutrition(
           failedIngredient.unit
         );
         const fallback = getUSDAFallback(failedIngredient.name, ingredientGrams);
+        const hasUSDAMatch = hasUSDAData(failedIngredient.name);
         
         enrichedIngredients.push({
           ...failedIngredient,
@@ -1629,6 +1794,8 @@ export async function batchLookupNutrition(
             carbs: fallback.carbs,
             fat: fallback.fat,
           },
+          source: hasUSDAMatch ? 'usda' : 'generic',
+          confidencePenalty: hasUSDAMatch ? 15 : 25,
           isUSDAFallback: true,
         });
       }
@@ -1640,13 +1807,14 @@ export async function batchLookupNutrition(
 
 /**
  * Looks up nutritional information for multiple ingredients with progress tracking
+ * Tracks confidence penalties from fallback usage
  * 
- * Requirements: 3.5, 8.3, 8.4
+ * Requirements: 3.5, 4.2, 4.5, 8.3, 8.4
  * 
  * @param ingredients - Array of ingredients to look up
  * @param onProgress - Callback for progress updates (current, total)
  * @param batchSize - Number of ingredients to process concurrently (default: 5)
- * @returns Array of enriched ingredients with nutrition data
+ * @returns Array of enriched ingredients with nutrition data and confidence penalties
  */
 export async function batchLookupNutritionWithProgress(
   ingredients: Array<{
@@ -1654,7 +1822,6 @@ export async function batchLookupNutritionWithProgress(
     quantity: number;
     unit: string;
     preparation?: string;
-    regionId: string;
     confidence: number;
   }>,
   onProgress?: (current: number, total: number) => void,
@@ -1664,7 +1831,6 @@ export async function batchLookupNutritionWithProgress(
   quantity: number;
   unit: string;
   preparation?: string;
-  regionId: string;
   confidence: number;
   nutrition: {
     foodId: string;
@@ -1682,6 +1848,8 @@ export async function batchLookupNutritionWithProgress(
     carbs: number;
     fat: number;
   };
+  source: 'fatsecret' | 'usda' | 'generic';
+  confidencePenalty: number;
   isUSDAFallback?: boolean;
 }>> {
   const enrichedIngredients: Array<{
@@ -1689,7 +1857,6 @@ export async function batchLookupNutritionWithProgress(
     quantity: number;
     unit: string;
     preparation?: string;
-    regionId: string;
     confidence: number;
     nutrition: {
       foodId: string;
@@ -1707,6 +1874,8 @@ export async function batchLookupNutritionWithProgress(
       carbs: number;
       fat: number;
     };
+    source: 'fatsecret' | 'usda' | 'generic';
+    confidencePenalty: number;
     isUSDAFallback?: boolean;
   }> = [];
 
@@ -1739,6 +1908,8 @@ export async function batchLookupNutritionWithProgress(
             servingUnit: nutrition.servingUnit,
           },
           scaledNutrition: nutrition.scaledNutrition,
+          source: nutrition.source,
+          confidencePenalty: nutrition.confidencePenalty,
           isUSDAFallback: nutrition.isUSDAFallback,
         };
       })
@@ -1759,6 +1930,7 @@ export async function batchLookupNutritionWithProgress(
           failedIngredient.unit
         );
         const fallback = getUSDAFallback(failedIngredient.name, ingredientGrams);
+        const hasUSDAMatch = hasUSDAData(failedIngredient.name);
         
         enrichedIngredients.push({
           ...failedIngredient,
@@ -1778,6 +1950,8 @@ export async function batchLookupNutritionWithProgress(
             carbs: fallback.carbs,
             fat: fallback.fat,
           },
+          source: hasUSDAMatch ? 'usda' : 'generic',
+          confidencePenalty: hasUSDAMatch ? 15 : 25,
           isUSDAFallback: true,
         });
       }
