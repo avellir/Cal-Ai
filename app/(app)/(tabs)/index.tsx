@@ -15,6 +15,8 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
+import { aggregateDailyNutrition } from '@/services/nutritionAggregation';
+import { useUserGoalsStore } from '@/store/userGoalsStore';
 
 const DAYS = [
   { label: 'T', date: '22', state: 'past' as const },
@@ -28,32 +30,28 @@ const DAYS = [
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-type MacroCard = {
+type MacroCardConfig = {
   label: string;
-  value: string;
   icon: IoniconName;
   iconColor: string;
   badgeColor: string;
 };
 
-const MACROS: MacroCard[] = [
+const MACRO_CONFIGS: MacroCardConfig[] = [
   {
     label: 'Protein left',
-    value: '166g',
     icon: 'fish',
     iconColor: '#FF7A7A',
     badgeColor: '#FFEFF1',
   },
   {
     label: 'Carbs left',
-    value: '295g',
     icon: 'leaf',
     iconColor: '#7C8BFF',
     badgeColor: '#EEF0FF',
   },
   {
     label: 'Fat left',
-    value: '68g',
     icon: 'water',
     iconColor: '#48C7F0',
     badgeColor: '#E6F7FF',
@@ -72,6 +70,35 @@ export default function HomeScreen() {
   const bottomGradientHeight = Math.round(Dimensions.get('window').height * 0.15);
   const recentMeal = meals[0] ?? null;
 
+  // User goals state
+  const goals = useUserGoalsStore((state) => state.goals);
+  const fetchGoals = useUserGoalsStore((state) => state.fetchGoals);
+  const hasGoals = useUserGoalsStore((state) => state.hasGoals);
+  const getDailyTargets = useUserGoalsStore((state) => state.getDailyTargets);
+
+  // Calculate daily nutrition totals and remaining values
+  const dailyTotals = aggregateDailyNutrition(meals);
+  const dailyTargets = getDailyTargets();
+
+  // Calculate remaining calories and macros
+  const caloriesRemaining = dailyTargets 
+    ? Math.max(0, dailyTargets.calories - dailyTotals.calories)
+    : 0;
+  const proteinRemaining = dailyTargets
+    ? Math.max(0, dailyTargets.protein - dailyTotals.protein)
+    : 0;
+  const carbsRemaining = dailyTargets
+    ? Math.max(0, dailyTargets.carbs - dailyTotals.carbs)
+    : 0;
+  const fatRemaining = dailyTargets
+    ? Math.max(0, dailyTargets.fat - dailyTotals.fat)
+    : 0;
+
+  // Calculate percentage consumed for progress ring
+  const percentageConsumed = dailyTargets && dailyTargets.calories > 0
+    ? Math.min(100, Math.round((dailyTotals.calories / dailyTargets.calories) * 100))
+    : 0;
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -80,7 +107,12 @@ export default function HomeScreen() {
     fetchMeals(userId).catch((error) => {
       console.error('Failed to load meals', error);
     });
-  }, [userId, fetchMeals]);
+
+    // Fetch user goals
+    fetchGoals(userId).catch((error) => {
+      console.error('Failed to load goals', error);
+    });
+  }, [userId, fetchMeals, fetchGoals]);
 
   const isInitialLoading = status === 'loading' && meals.length === 0;
 
@@ -187,28 +219,70 @@ export default function HomeScreen() {
             })}
           </View>
 
-          <View style={styles.calorieCard}>
+          <Pressable
+            style={styles.calorieCard}
+            onPress={() => {
+              if (!hasGoals()) {
+                router.push('/goal-flow/height-weight' as any);
+              }
+            }}
+            disabled={hasGoals()}>
             <View style={styles.calorieCopy}>
-              <Text style={styles.calorieValue}>2465</Text>
-              <Text style={styles.calorieLabel}>Calories left</Text>
+              {hasGoals() ? (
+                <>
+                  <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
+                  <Text style={styles.calorieLabel}>Calories left</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.calorieValue}>Set Goals</Text>
+                  <Text style={styles.calorieLabel}>Tap to configure your targets</Text>
+                </>
+              )}
             </View>
             <View style={styles.calorieRing}>
+              <View 
+                style={[
+                  styles.calorieRingProgress,
+                  {
+                    transform: [{ rotate: `${(percentageConsumed * 3.6) - 90}deg` }],
+                    opacity: hasGoals() ? 1 : 0,
+                  }
+                ]}
+              />
               <View style={styles.calorieRingInner}>
                 <Feather name="flame" size={24} color="#11181C" />
               </View>
             </View>
-          </View>
+          </Pressable>
 
           <View style={styles.macroRow}>
-            {MACROS.map((macro) => (
-              <View key={macro.label} style={styles.macroCard}>
-                <View style={[styles.macroBadge, { backgroundColor: macro.badgeColor }]}>
-                  <Ionicons name={macro.icon} size={18} color={macro.iconColor} />
+            {MACRO_CONFIGS.map((config, index) => {
+              let value = '0g';
+              
+              if (hasGoals()) {
+                if (index === 0) {
+                  // Protein
+                  value = `${Math.round(proteinRemaining)}g`;
+                } else if (index === 1) {
+                  // Carbs
+                  value = `${Math.round(carbsRemaining)}g`;
+                } else if (index === 2) {
+                  // Fat
+                  value = `${Math.round(fatRemaining)}g`;
+                }
+              }
+              
+              return (
+                <View key={config.label} style={styles.macroCard}>
+                  <View style={[styles.macroBadge, { backgroundColor: config.badgeColor }]}>
+                    <Ionicons name={config.icon} size={18} color={config.iconColor} />
+                  </View>
+                  <Text style={styles.macroValue}>{value}</Text>
+                  <Text style={styles.macroLabel}>{config.label}</Text>
                 </View>
-                <Text style={styles.macroValue}>{macro.value}</Text>
-                <Text style={styles.macroLabel}>{macro.label}</Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
 
           <View style={styles.carouselDots}>
@@ -432,6 +506,18 @@ const styles = StyleSheet.create({
     borderColor: '#EFEFF7',
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  calorieRingProgress: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 12,
+    borderColor: '#11181C',
+    borderTopColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderBottomColor: 'transparent',
   },
   calorieRingInner: {
     width: 72,
@@ -440,6 +526,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F8FD',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
   },
   macroRow: {
     flexDirection: 'row',

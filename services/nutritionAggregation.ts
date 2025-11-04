@@ -1,329 +1,71 @@
 /**
- * Stage 4: Nutritional Aggregation
+ * Nutrition Aggregation Service
  * 
- * Aggregates nutritional data from enriched ingredients and generates
- * comprehensive ingredient breakdowns grouped by food region.
+ * Utilities for aggregating daily meal nutrition data.
+ * Calculates total calories and macros from logged meals for the current day.
  * 
- * Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 5.1, 5.2, 5.4
+ * Requirements: 11.2, 12.2, 12.3, 12.4
  */
 
-import type { EnrichedIngredient } from '@/lib/advanced-food-analysis-types';
-
-// ============================================================================
-// Task 6.1: Nutrition Aggregation Logic
-// ============================================================================
+import type { MealLogEntry } from '@/lib/meal-log-types';
 
 /**
- * Aggregates nutrition from all enriched ingredients
- * 
- * Implements requirements:
- * - 4.1: Sum calories from all identified ingredients
- * - 4.2: Sum protein, carbohydrates, and fat from all ingredients
- * - 4.3: Round total calories to nearest 5 for values over 50
- * - 4.4: Round total macronutrients to nearest whole gram
- * 
- * @param enrichedIngredients - Array of ingredients with nutrition data
- * @returns Total nutrition and weighted average confidence score
+ * Aggregated daily nutrition totals
  */
-export function aggregateNutrition(enrichedIngredients: EnrichedIngredient[]): {
-  totalNutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-  confidence: number;
-} {
-  // Handle empty array
-  if (enrichedIngredients.length === 0) {
-    return {
-      totalNutrition: {
-        calories: 0,
-        protein: 0,
-        carbs: 0,
-        fat: 0,
-      },
-      confidence: 0,
-    };
-  }
-
-  // Sum all nutritional values from scaled nutrition
-  const rawTotals = enrichedIngredients.reduce(
-    (acc, ingredient) => ({
-      calories: acc.calories + ingredient.scaledNutrition.calories,
-      protein: acc.protein + ingredient.scaledNutrition.protein,
-      carbs: acc.carbs + ingredient.scaledNutrition.carbs,
-      fat: acc.fat + ingredient.scaledNutrition.fat,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
-  );
-
-  // Requirement 4.3: Round calories to nearest 5 for values over 50
-  const roundedCalories = rawTotals.calories > 50
-    ? Math.round(rawTotals.calories / 5) * 5
-    : Math.round(rawTotals.calories);
-
-  // Requirement 4.4: Round macronutrients to nearest whole gram
-  const totalNutrition = {
-    calories: roundedCalories,
-    protein: Math.round(rawTotals.protein),
-    carbs: Math.round(rawTotals.carbs),
-    fat: Math.round(rawTotals.fat),
-  };
-
-  // Calculate weighted average confidence
-  // Weight each ingredient's confidence by its calorie contribution
-  const totalCalories = enrichedIngredients.reduce(
-    (sum, ing) => sum + ing.scaledNutrition.calories,
-    0
-  );
-
-  let confidence: number;
-  if (totalCalories === 0) {
-    // If no calories, use simple average
-    confidence = enrichedIngredients.reduce(
-      (sum, ing) => sum + ing.confidence,
-      0
-    ) / enrichedIngredients.length;
-  } else {
-    // Weighted average by calorie contribution
-    confidence = enrichedIngredients.reduce(
-      (sum, ing) => sum + (ing.confidence * ing.scaledNutrition.calories / totalCalories),
-      0
-    );
-  }
-
-  return {
-    totalNutrition,
-    confidence: Math.round(confidence),
-  };
-}
-
-// ============================================================================
-// Task 6.2: Ingredient Breakdown Generation
-// ============================================================================
-
-/**
- * Ingredient with contribution percentages for display
- */
-export type IngredientBreakdown = {
-  name: string;
-  quantity: number;
-  unit: string;
-  preparation?: string;
-  confidence: number;
-  nutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-  contribution: {
-    caloriesPercent: number;
-    proteinPercent: number;
-    carbsPercent: number;
-    fatPercent: number;
-  };
-  displayQuantity: string; // User-friendly quantity with unit conversion
+export type DailyNutritionTotals = {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
 };
 
 /**
- * Ingredients grouped by food region
- */
-export type RegionBreakdown = {
-  regionDescription: string;
-  ingredients: IngredientBreakdown[];
-  regionTotals: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  };
-};
-
-/**
- * Generates ingredient breakdown with contributions to total nutrition
+ * Check if a timestamp is from today
  * 
- * Implements requirements:
- * - 4.5: Provide breakdown showing each ingredient's contribution
- * - 5.1: Return list of all identified ingredients with quantities
- * - 5.4: Use user-friendly units alongside metric measurements
- * 
- * @param enrichedIngredients - Array of ingredients with nutrition data
- * @param totalNutrition - Total nutrition for calculating percentages
- * @returns Array with single breakdown containing all ingredients with contribution data
+ * @param timestamp - Unix timestamp in milliseconds
+ * @returns true if timestamp is from today, false otherwise
  */
-export function generateIngredientBreakdown(
-  enrichedIngredients: EnrichedIngredient[],
-  totalNutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }
-): RegionBreakdown[] {
-  // Calculate totals for all ingredients
-  const regionTotals = enrichedIngredients.reduce(
-    (acc, ing) => ({
-      calories: acc.calories + ing.scaledNutrition.calories,
-      protein: acc.protein + ing.scaledNutrition.protein,
-      carbs: acc.carbs + ing.scaledNutrition.carbs,
-      fat: acc.fat + ing.scaledNutrition.fat,
-    }),
-    { calories: 0, protein: 0, carbs: 0, fat: 0 }
+function isToday(timestamp: number): boolean {
+  const date = new Date(timestamp);
+  const today = new Date();
+  
+  return (
+    date.getDate() === today.getDate() &&
+    date.getMonth() === today.getMonth() &&
+    date.getFullYear() === today.getFullYear()
   );
-
-  // Format each ingredient with contribution percentages
-  const formattedIngredients: IngredientBreakdown[] = enrichedIngredients.map(ingredient => {
-    const contribution = calculateContribution(ingredient, totalNutrition);
-    const displayQuantity = formatDisplayQuantity(ingredient.quantity, ingredient.unit);
-
-    return {
-      name: ingredient.name,
-      quantity: ingredient.quantity,
-      unit: ingredient.unit,
-      preparation: ingredient.preparation,
-      confidence: ingredient.confidence,
-      nutrition: {
-        calories: ingredient.scaledNutrition.calories,
-        protein: ingredient.scaledNutrition.protein,
-        carbs: ingredient.scaledNutrition.carbs,
-        fat: ingredient.scaledNutrition.fat,
-      },
-      contribution,
-      displayQuantity,
-    };
-  });
-
-  // Return single breakdown for all ingredients
-  return [{
-    regionDescription: 'All ingredients',
-    ingredients: formattedIngredients,
-    regionTotals,
-  }];
 }
 
 /**
- * Calculates percentage contribution of an ingredient to total nutrition
- */
-function calculateContribution(
-  ingredient: EnrichedIngredient,
-  totalNutrition: {
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-  }
-): {
-  caloriesPercent: number;
-  proteinPercent: number;
-  carbsPercent: number;
-  fatPercent: number;
-} {
-  // Avoid division by zero
-  const caloriesPercent = totalNutrition.calories > 0
-    ? Math.round((ingredient.scaledNutrition.calories / totalNutrition.calories) * 100)
-    : 0;
-
-  const proteinPercent = totalNutrition.protein > 0
-    ? Math.round((ingredient.scaledNutrition.protein / totalNutrition.protein) * 100)
-    : 0;
-
-  const carbsPercent = totalNutrition.carbs > 0
-    ? Math.round((ingredient.scaledNutrition.carbs / totalNutrition.carbs) * 100)
-    : 0;
-
-  const fatPercent = totalNutrition.fat > 0
-    ? Math.round((ingredient.scaledNutrition.fat / totalNutrition.fat) * 100)
-    : 0;
-
-  return {
-    caloriesPercent,
-    proteinPercent,
-    carbsPercent,
-    fatPercent,
-  };
-}
-
-/**
- * Formats quantity with user-friendly unit conversions
+ * Aggregate daily meal nutrition
  * 
- * Requirement 5.4: Use user-friendly units alongside metric measurements
+ * Sums calories, protein, carbs, and fat from all meals logged today.
+ * Filters meals by current date before aggregating.
+ * 
+ * Requirements: 11.2, 12.2, 12.3, 12.4
+ * 
+ * @param meals - Array of meal log entries
+ * @returns Aggregated nutrition totals for today
  */
-function formatDisplayQuantity(quantity: number, unit: string): string {
-  const roundedQuantity = Math.round(quantity * 10) / 10; // Round to 1 decimal
-
-  switch (unit.toLowerCase()) {
-    case 'g':
-      // Convert to oz if over 28g
-      if (quantity >= 28) {
-        const oz = Math.round((quantity / 28.35) * 10) / 10;
-        return `${roundedQuantity}g (${oz}oz)`;
-      }
-      return `${roundedQuantity}g`;
-
-    case 'ml':
-      // Convert to fl oz if over 30ml
-      if (quantity >= 30) {
-        const floz = Math.round((quantity / 29.57) * 10) / 10;
-        return `${roundedQuantity}ml (${floz}fl oz)`;
-      }
-      return `${roundedQuantity}ml`;
-
-    case 'oz':
-      // Convert to grams
-      const grams = Math.round(quantity * 28.35 * 10) / 10;
-      return `${roundedQuantity}oz (${grams}g)`;
-
-    case 'cup':
-      // Show ml equivalent
-      const ml = Math.round(quantity * 240);
-      return `${roundedQuantity} cup (${ml}ml)`;
-
-    case 'tbsp':
-      // Show ml equivalent
-      const tbspMl = Math.round(quantity * 15);
-      return `${roundedQuantity} tbsp (${tbspMl}ml)`;
-
-    case 'tsp':
-      // Show ml equivalent
-      const tspMl = Math.round(quantity * 5);
-      return `${roundedQuantity} tsp (${tspMl}ml)`;
-
-    case 'piece':
-      return `${Math.round(quantity)} piece${quantity !== 1 ? 's' : ''}`;
-
-    default:
-      return `${roundedQuantity} ${unit}`;
-  }
-}
-
-/**
- * Formats ingredient breakdown for display in UI
- * Returns a human-readable summary of all ingredients
- */
-export function formatIngredientSummary(regionBreakdowns: RegionBreakdown[]): string {
-  const lines: string[] = [];
-
-  for (const region of regionBreakdowns) {
-    lines.push(`\n${region.regionDescription}:`);
-    
-    for (const ingredient of region.ingredients) {
-      const prep = ingredient.preparation ? ` (${ingredient.preparation})` : '';
-      const contribution = `${ingredient.contribution.caloriesPercent}% of calories`;
-      lines.push(
-        `  • ${ingredient.name}${prep}: ${ingredient.displayQuantity} - ` +
-        `${ingredient.nutrition.calories} cal (${contribution})`
-      );
+export function aggregateDailyNutrition(meals: MealLogEntry[]): DailyNutritionTotals {
+  // Filter meals to only include today's entries
+  const todaysMeals = meals.filter((meal) => isToday(meal.timestamp));
+  
+  // Sum up all nutrition values
+  const totals = todaysMeals.reduce(
+    (acc, meal) => ({
+      calories: acc.calories + meal.calories,
+      protein: acc.protein + meal.macros.protein,
+      carbs: acc.carbs + meal.macros.carbs,
+      fat: acc.fat + meal.macros.fat,
+    }),
+    {
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
     }
-
-    lines.push(
-      `  Region Total: ${region.regionTotals.calories} cal, ` +
-      `${region.regionTotals.protein}g protein, ` +
-      `${region.regionTotals.carbs}g carbs, ` +
-      `${region.regionTotals.fat}g fat`
-    );
-  }
-
-  return lines.join('\n');
+  );
+  
+  return totals;
 }

@@ -1,15 +1,33 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ProfileInputModal } from '@/components/profile-input-modal';
 import { ThemedText } from '@/components/themed-text';
+import { useSessionStore } from '@/lib/session-store';
+import { useUserGoalsStore } from '@/store/userGoalsStore';
 import { useUserProfileStore } from '@/store/userProfileStore';
 
 export default function SettingsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const { profile } = useUserProfileStore();
+  const { session } = useSessionStore();
+  const { goals, fetchGoals, hasGoals, getDailyTargets } = useUserGoalsStore();
+
+  // Fetch goals on mount
+  useEffect(() => {
+    if (session?.user?.id) {
+      fetchGoals(session.user.id);
+    }
+  }, [session?.user?.id]);
+
+  const handleAdjustGoals = () => {
+    router.push('/(app)/goal-flow' as any);
+  };
+
+  const dailyTargets = getDailyTargets();
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
@@ -73,6 +91,44 @@ export default function SettingsScreen() {
             <ThemedText style={styles.editButtonText}>
               {profile.age || profile.height || profile.weight ? 'Edit Profile' : 'Add Profile Info'}
             </ThemedText>
+          </Pressable>
+        </View>
+
+        {/* Customization Section */}
+        <View style={styles.section}>
+          <ThemedText style={styles.sectionTitle}>Customization</ThemedText>
+          
+          {/* Personal Details Row */}
+          <Pressable 
+            style={styles.settingsRow} 
+            onPress={() => setModalVisible(true)}>
+            <View style={styles.settingsRowLeft}>
+              <View style={styles.settingsIconContainer}>
+                <Ionicons name="person-outline" size={20} color="#11181C" />
+              </View>
+              <ThemedText style={styles.settingsRowText}>Personal Details</ThemedText>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </Pressable>
+
+          {/* Adjust Goals Row */}
+          <Pressable 
+            style={styles.settingsRow} 
+            onPress={handleAdjustGoals}>
+            <View style={styles.settingsRowLeft}>
+              <View style={styles.settingsIconContainer}>
+                <Ionicons name="nutrition-outline" size={20} color="#11181C" />
+              </View>
+              <View style={styles.settingsRowContent}>
+                <ThemedText style={styles.settingsRowText}>Adjust Goals</ThemedText>
+                {hasGoals() && dailyTargets && (
+                  <ThemedText style={styles.settingsRowSubtext}>
+                    Daily target: {dailyTargets.calories} calories
+                  </ThemedText>
+                )}
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </Pressable>
         </View>
       </ScrollView>
@@ -174,5 +230,43 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  settingsRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  settingsIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsRowContent: {
+    flex: 1,
+    gap: 4,
+  },
+  settingsRowText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#11181C',
+  },
+  settingsRowSubtext: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#6B7280',
   },
 });

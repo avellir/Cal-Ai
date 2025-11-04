@@ -1,6 +1,6 @@
+import { Redirect, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Redirect, Stack } from 'expo-router';
 
 import { bootstrapSession, useSessionStore } from '@/lib/session-store';
 
@@ -30,6 +30,7 @@ export default function AppLayout() {
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       <Stack.Screen name="camera" options={{ headerShown: false }} />
       <Stack.Screen name="food-result" options={{ headerShown: false }} />
+      <Stack.Screen name="goal-flow" options={{ headerShown: false }} />
     </Stack>
   );
 }
