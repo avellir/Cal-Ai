@@ -18,13 +18,13 @@ const CHECKLIST_ITEMS = [
 export default function CalculationScreen() {
   const router = useRouter();
   const progressAnim = useRef(new Animated.Value(0)).current;
-  const { 
-    heightCm, 
-    weightKg, 
-    age, 
-    goalType, 
+  const {
+    heightCm,
+    weightKg,
+    age,
+    goalType,
     targetWeightKg,
-    setCalculatedValues 
+    setCalculatedValues
   } = useGoalFlow();
 
   useEffect(() => {
@@ -44,7 +44,7 @@ export default function CalculationScreen() {
         goalType,
         targetWeightKg
       );
-      
+
       // Save calculated values to context
       setCalculatedValues(
         nutritionPlan.dailyCalories,
@@ -69,7 +69,11 @@ export default function CalculationScreen() {
   });
 
   return (
-    <GoalFlowLayout currentStep={5} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={5}
+      totalSteps={6}
+      title="We’re setting everything up"
+      subtitle="Finalizing your results">
       <View style={styles.container}>
         {/* Progress Percentage */}
         <View style={styles.progressSection}>
@@ -100,7 +104,7 @@ export default function CalculationScreen() {
           {CHECKLIST_ITEMS.map((item, index) => (
             <View key={item} style={styles.checklistItem}>
               <View style={styles.checkmarkCircle}>
-                <Ionicons name="checkmark" size={16} color="#10B981" />
+                <Ionicons name="checkmark" size={16} color={DesignColors.success} />
               </View>
               <Text style={styles.checklistText}>{item}</Text>
             </View>
@@ -132,7 +136,7 @@ const styles = StyleSheet.create({
   progressPercentage: {
     fontSize: 64,
     fontWeight: '700',
-    color: DesignColors.black,
+    color: DesignColors.primary,
     marginBottom: Spacing.sm,
   },
   progressLabel: {
@@ -167,7 +171,7 @@ const styles = StyleSheet.create({
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     borderRadius: 4,
   },
   checklistContainer: {

@@ -1,12 +1,25 @@
-﻿export type NutritionData = {
+﻿// Individual ingredient detected in the image
+export type IngredientData = {
+  name: string;
+  grams: number;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+};
+
+export type NutritionData = {
   foodName: string;
   calories: number;
   protein: number;
   carbs: number;
   fat: number;
   servingSize: string;
+  ingredients: IngredientData[]; // Per-ingredient breakdown
+  visualEvidence: string[];
   confidence: number;
   reasoning: string;
+  warnings?: string[];
 };
 
 export type AnalysisResult = {
@@ -21,7 +34,51 @@ type ValidationResult = {
   warnings: string[];
 };
 
-const enhancedPrompt = 'Analyze this food image and provide detailed nutritional information.\n\nCRITICAL INSTRUCTIONS:\n\n1. PORTION SIZE ESTIMATION:\n   - Use reference objects visible in the image (plates, utensils, hands)\n   - Standard plate = 10-11 inches diameter\n   - Cross-reference with Stage 1 portion hints\n   - Account for food density: 1 cup leafy greens does not equal 1 cup rice in weight\n\n2. PREPARATION METHOD ADJUSTMENTS:\n   - Fried foods: Add 10-20% calories for oil absorption\n     * Deep fried: +20% (e.g., fried chicken, french fries)\n     * Pan fried: +10-15% (e.g., pan-fried fish)\n   - Grilled/baked: Use base nutritional values\n   - Sauteed: Add ~1 tbsp oil (120 cal, 14g fat) per serving\n   - Steamed/boiled: Use base values, no additions\n\n3. COMPREHENSIVE ITEM ACCOUNTING:\n   - Include ALL visible food items from Stage 1\n   - Account for sauces, dressings, and condiments\n   - Estimate butter, oil, or cheese if visible\n   - Consider garnishes if substantial (>1 tbsp)\n\n4. USDA DATABASE STANDARDS:\n   - Base all estimates on USDA nutritional data\n   - Use median values for foods with recipe variations\n   - Round calories to nearest 10 for portions >100 cal\n   - Round macros (protein, carbs, fat) to nearest whole gram\n\n5. NUTRITIONAL VALIDATION:\n   - Verify: (protein * 4) + (carbs * 4) + (fat * 9) should equal total calories (+/-10%)\n   - If mismatch, adjust macros proportionally to match calories\n   - Protein: typically 10-35% of calories\n   - Carbs: typically 45-65% of calories\n   - Fat: typically 20-35% of calories\n\n6. CONFIDENCE SCORING:\n   - Reduce confidence if:\n     * Image quality is poor (blurry, dark, obscured)\n     * Portion size is ambiguous (no reference objects)\n     * Food type is unusual or mixed dish\n     * Preparation method is unclear\n   - High confidence (75-100): Clear image, standard food, visible portions\n   - Medium confidence (50-74): Some ambiguity in portion or preparation\n   - Low confidence (<50): Significant uncertainty in identification or quantity\n\n7. CONSERVATIVE ESTIMATES:\n   - When uncertain, estimate on the lower end for calories\n   - Better to underestimate than overestimate for user trust\n   - Note uncertainty in reasoning field\n\nReturn ONLY valid JSON:\n{\n  "foodName": "specific name(s) of all food items",\n  "calories": number (rounded to nearest 10 if >100),\n  "protein": number (grams, whole number),\n  "carbs": number (grams, whole number),\n  "fat": number (grams, whole number),\n  "servingSize": "detailed weight/volume with breakdown",\n  "confidence": number (0-100),\n  "reasoning": "brief explanation: portion estimation method, preparation adjustments, and any assumptions (max 2 sentences)"\n}\n\nIMPORTANT: Ensure nutritional consistency. Verify that (protein*4 + carbs*4 + fat*9) is within 10% of total calories.';
+const enhancedPrompt = `
+You are a registered dietitian analyzing a food photo. BE CONSERVATIVE and avoid overestimating. Default to smaller amounts when unsure.
+
+## CRITICAL PORTION REFERENCE (memorize):
+- Chicken breast: 100-150g cooked = 165-250 cal, 31-47g protein, 0g carbs, 4-5g fat
+- Egg (1 large): 50g = 72 cal, 6g protein, 0.4g carbs, 5g fat
+- Bread slice: 30-40g = 75-100 cal, 3g protein, 14-18g carbs, 1g fat (2 slices ≈ 60-80g total)
+- Hummus/tzatziki/labneh thin spread: 15-30g = 25-60 cal (NEVER >30g unless clearly heaped)
+- Olive oil/butter: 1 tbsp = 14g = 120 cal. Add only if visible oil pooling/glossy.
+- Leafy greens: 1 cup = 30g = 7 cal (negligible).
+- Olives: 5 medium = 20g = 25 cal.
+
+## ESTIMATION RULES:
+1) Always choose the LOWER plausible grams; do not assume large hidden portions.
+2) If food sits flat on sauce, count sauce as 15-30g max.
+3) Visible grilled chicken typically ONE breast (100-150g), not more.
+4) Small sides (pickles/olives/spinach) are 20-50g each, not 100g+.
+5) Total plate mass usually 400-700g unless obviously huge; default calories 500-850 unless clearly large/fried.
+6) If uncertain, downscale grams by 15-25% rather than upscaling.
+7) Never exceed 900 calories unless multiple large starches/fried items are clearly visible.
+
+## OUTPUT FORMAT (strict JSON):
+{
+  "foodName": "Brief description",
+  "ingredients": [
+    {"name": "Grilled chicken breast", "grams": 120, "calories": 198, "protein": 37, "carbs": 0, "fat": 4},
+    {"name": "Hummus spread", "grams": 25, "calories": 42, "protein": 2, "carbs": 4, "fat": 2},
+    {"name": "Bread slice", "grams": 35, "calories": 90, "protein": 3, "carbs": 16, "fat": 1}
+  ],
+  "servingSize": "Total Xg (sum of ingredients)",
+  "calories": (sum of ingredient calories),
+  "protein": (sum),
+  "carbs": (sum),
+  "fat": (sum),
+  "visualEvidence": ["specific visual cues used"],
+  "confidence": 0-100 (lower if blurry/uncertain),
+  "reasoning": "Step-by-step: identified X items, estimated portions conservatively based on visual size relative to plate/fork",
+  "warnings": ["any potential over/undercount notes"]
+}
+
+VALIDATION (MANDATORY):
+- Ensure (protein×4)+(carbs×4)+(fat×9) ≈ calories (±10%). If mismatch, adjust calories/macro grams down to match.
+- Total calories should generally be 500-850 unless clearly large; if >900 without obvious large/fried items, scale down.
+- Ingredients must sum to totals; do not invent extra hidden portions.
+`;
 
 /**
  * Analyzes a food image using Google Gemini 2.5 Flash-Lite
@@ -57,6 +114,7 @@ export async function analyzeFoodImage(imageUri: string): Promise<AnalysisResult
     // Validate nutritional data for consistency
     const validation = validateNutritionData(nutritionData);
     const finalData = validation.adjustedData || nutritionData;
+    finalData.warnings = validation.warnings;
 
     // Log validation warnings for debugging
     if (validation.warnings.length > 0) {
@@ -198,6 +256,7 @@ async function runGeminiRequest({ apiKey, prompt, base64Image }: GeminiRequest):
             topK: 32,
             topP: 1,
             maxOutputTokens: 2048,
+            responseMimeType: "application/json"
           },
         }),
       }
@@ -240,12 +299,13 @@ function sanitizeModelResponse(content: string): string {
 
 function parseNutrition(raw: string): NutritionData {
   try {
-    return JSON.parse(raw) as NutritionData;
+    const parsed = JSON.parse(raw);
+    return normalizeNutritionData(parsed);
   } catch (error) {
     // Try to fix common truncation issues
     let fixedRaw = raw.trim();
 
-    // If JSON is incomplete, try to close it
+    // If JSON is incomplete, try to close it (e.g. if token limit cut it off)
     if (!fixedRaw.endsWith('}')) {
       const openBraces = (fixedRaw.match(/{/g) || []).length;
       const closeBraces = (fixedRaw.match(/}/g) || []).length;
@@ -257,22 +317,89 @@ function parseNutrition(raw: string): NutritionData {
     }
 
     try {
-      return JSON.parse(fixedRaw) as NutritionData;
+      const parsed = JSON.parse(fixedRaw);
+      return normalizeNutritionData(parsed);
     } catch (secondError) {
-      // Return fallback nutrition data
+      // Return fallback nutrition data if repair fails
       console.warn('Failed to parse nutrition response, using fallback');
       return {
         foodName: 'Unknown food item',
-        calories: 200,
-        protein: 10,
-        carbs: 20,
-        fat: 8,
+        calories: 150,
+        protein: 8,
+        carbs: 15,
+        fat: 6,
         servingSize: 'Estimated portion',
-        confidence: 30,
-        reasoning: 'Could not analyze due to parsing error - using estimated values'
+        ingredients: [],
+        visualEvidence: ['Could not analyze visual details due to error'],
+        confidence: 25,
+        reasoning: 'Could not analyze due to parsing error - using conservative estimated values'
       };
     }
   }
+}
+
+/**
+ * Normalizes parsed data to ensure all required fields exist
+ * Recalculates totals from ingredients if available
+ */
+function normalizeNutritionData(parsed: Record<string, unknown>): NutritionData {
+  // Ensure ingredients array exists
+  const ingredients: IngredientData[] = Array.isArray(parsed.ingredients)
+    ? parsed.ingredients.map((ing: Record<string, unknown>) => ({
+        name: String(ing.name || 'Unknown item'),
+        grams: Number(ing.grams) || 0,
+        calories: Number(ing.calories) || 0,
+        protein: Number(ing.protein) || 0,
+        carbs: Number(ing.carbs) || 0,
+        fat: Number(ing.fat) || 0,
+      }))
+    : [];
+
+  // If we have ingredients, recalculate totals from them (more accurate)
+  let calories = Number(parsed.calories) || 0;
+  let protein = Number(parsed.protein) || 0;
+  let carbs = Number(parsed.carbs) || 0;
+  let fat = Number(parsed.fat) || 0;
+
+  if (ingredients.length > 0) {
+    const summed = ingredients.reduce(
+      (acc, ing) => ({
+        calories: acc.calories + ing.calories,
+        protein: acc.protein + ing.protein,
+        carbs: acc.carbs + ing.carbs,
+        fat: acc.fat + ing.fat,
+        grams: acc.grams + ing.grams,
+      }),
+      { calories: 0, protein: 0, carbs: 0, fat: 0, grams: 0 }
+    );
+
+    // Use summed values from ingredients (more reliable)
+    calories = summed.calories;
+    protein = summed.protein;
+    carbs = summed.carbs;
+    fat = summed.fat;
+
+    // Update serving size to reflect actual total grams
+    if (summed.grams > 0) {
+      parsed.servingSize = `${Math.round(summed.grams)}g total`;
+    }
+  }
+
+  return {
+    foodName: String(parsed.foodName || 'Food item'),
+    calories: Math.round(calories),
+    protein: Math.round(protein),
+    carbs: Math.round(carbs),
+    fat: Math.round(fat),
+    servingSize: String(parsed.servingSize || 'Estimated portion'),
+    ingredients,
+    visualEvidence: Array.isArray(parsed.visualEvidence)
+      ? parsed.visualEvidence.map(String)
+      : ['No visual evidence provided'],
+    confidence: Number(parsed.confidence) || 50,
+    reasoning: String(parsed.reasoning || 'No reasoning provided'),
+    warnings: Array.isArray(parsed.warnings) ? parsed.warnings.map(String) : [],
+  };
 }
 
 /**
@@ -297,7 +424,24 @@ export function getConfidenceMessage(confidence: number): string {
  */
 function validateNutritionData(data: NutritionData): ValidationResult {
   const warnings: string[] = [];
-  let adjustedData = { ...data };
+
+  // Ensure visualEvidence exists and is an array (safety check for the new field)
+  const safeVisualEvidence = Array.isArray(data.visualEvidence)
+    ? data.visualEvidence
+    : ['No visual evidence provided'];
+
+  // Ensure ingredients exists and is an array
+  const safeIngredients = Array.isArray(data.ingredients)
+    ? data.ingredients
+    : [];
+
+  // Initialize adjustedData with safe fields
+  let adjustedData = {
+    ...data,
+    visualEvidence: safeVisualEvidence,
+    ingredients: safeIngredients,
+  };
+
   let isValid = true;
 
   const roundCaloriesValue = (value: number): number => {
@@ -307,10 +451,40 @@ function validateNutritionData(data: NutritionData): ValidationResult {
     return value > 100 ? Math.round(value / 10) * 10 : Math.round(value);
   };
 
+  const totalIngredientGrams = safeIngredients.reduce((sum, ing) => sum + (ing.grams || 0), 0);
+
+  // Heuristic: if no ingredient breakdown and calories are high, downscale conservatively
+  if ((safeIngredients.length === 0 || safeIngredients.every((ing) => !ing.grams)) && data.calories > 900) {
+    warnings.push('No ingredient breakdown; applying conservative downscale');
+    const scaleFactor = 0.65;
+    adjustedData.calories = roundCaloriesValue(data.calories * scaleFactor);
+    adjustedData.protein = Math.max(0, Math.round(data.protein * scaleFactor));
+    adjustedData.carbs = Math.max(0, Math.round(data.carbs * scaleFactor));
+    adjustedData.fat = Math.max(0, Math.round(data.fat * scaleFactor));
+    adjustedData.confidence = Math.max(30, data.confidence - 20);
+    isValid = false;
+  }
+
+  // Heuristic: if ingredient grams are modest but calories are high, downscale
+  if (totalIngredientGrams > 0 && totalIngredientGrams < 700 && adjustedData.calories > 900) {
+    warnings.push('Calories high relative to portion size; applying conservative downscale');
+    const scaleFactor = 0.75;
+    adjustedData.calories = roundCaloriesValue(adjustedData.calories * scaleFactor);
+    adjustedData.protein = Math.max(0, Math.round(adjustedData.protein * scaleFactor));
+    adjustedData.carbs = Math.max(0, Math.round(adjustedData.carbs * scaleFactor));
+    adjustedData.fat = Math.max(0, Math.round(adjustedData.fat * scaleFactor));
+    adjustedData.confidence = Math.max(35, adjustedData.confidence - 15);
+    isValid = false;
+  }
+
   // 1. Validate calorie-to-macro consistency
   // Formula: protein×4 + carbs×4 + fat×9 ≈ calories
   const calculatedCalories = (data.protein * 4) + (data.carbs * 4) + (data.fat * 9);
-  const calorieDiscrepancy = Math.abs(calculatedCalories - data.calories) / data.calories;
+
+  // Handle potential division by zero
+  const calorieDiscrepancy = data.calories > 0
+    ? Math.abs(calculatedCalories - data.calories) / data.calories
+    : (calculatedCalories > 0 ? 1 : 0);
 
   if (calorieDiscrepancy > 0.15) { // More than 15% discrepancy
     warnings.push('Calorie-to-macro mismatch detected, applying conservative adjustment');
@@ -327,18 +501,27 @@ function validateNutritionData(data: NutritionData): ValidationResult {
       );
       adjustedData.calories = adjustedCalories;
     } else {
+      // If reported calories are much HIGHER than macros sum, scale macros UP? 
+      // Or if reported is LOWER than macros sum?
+      // Original Logic: Scale macros DOWN if they sum to more than the reported calories,
+      // OR scale macros to match reported calories if reported is the anchor.
+      // The logic here scales macros to match the reported calories if the reported calories 
+      // are considered the source of truth but the macros don't add up.
+
       const scaleFactor = data.calories / totalMacroCalories;
-      warnings.push('Scaling macronutrients down to match reported calorie total');
+      warnings.push('Scaling macronutrients to match reported calorie total');
       adjustedData.protein = Math.max(0, Math.round(data.protein * scaleFactor));
       adjustedData.carbs = Math.max(0, Math.round(data.carbs * scaleFactor));
       adjustedData.fat = Math.max(0, Math.round(data.fat * scaleFactor));
     }
 
+    // Apply confidence penalty
     adjustedData.confidence = Math.max(30, data.confidence - 15);
     isValid = false;
   }
 
   // 2. Validate reasonable macro ratios
+  // Use adjusted values to check the final result
   const proteinCalories = adjustedData.protein * 4;
   const carbCalories = adjustedData.carbs * 4;
   const fatCalories = adjustedData.fat * 9;
@@ -385,7 +568,8 @@ function validateNutritionData(data: NutritionData): ValidationResult {
   // 4. Append warnings to reasoning if any
   if (warnings.length > 0) {
     const warningText = warnings.join('; ');
-    adjustedData.reasoning = `${adjustedData.reasoning} [Validation: ${warningText}]`;
+    const currentReasoning = adjustedData.reasoning || '';
+    adjustedData.reasoning = `${currentReasoning} [Validation: ${warningText}]`.trim();
   }
 
   return {

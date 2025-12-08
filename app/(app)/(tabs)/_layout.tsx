@@ -3,10 +3,11 @@ import React from 'react';
 
 import { HapticTab } from '@/components/haptic-tab';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { DesignColors } from '@/constants/theme';
 
 export default function TabLayout() {
-  const activeTint = '#11181C';
-  const inactiveTint = '#B5B8C4';
+  const activeTint = DesignColors.primary;
+  const inactiveTint = DesignColors.gray300;
 
   return (
     <Tabs
@@ -21,8 +22,8 @@ export default function TabLayout() {
           paddingBottom: 12,
           paddingTop: 8,
           borderTopWidth: 0.5,
-          borderTopColor: '#E5E7EB',
-          backgroundColor: '#FFFFFF',
+          borderTopColor: DesignColors.gray200,
+          backgroundColor: DesignColors.white,
         },
         tabBarLabelStyle: {
           fontSize: 12,

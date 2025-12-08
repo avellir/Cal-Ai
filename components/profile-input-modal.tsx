@@ -16,6 +16,8 @@ import {
     View,
 } from 'react-native';
 
+import { DesignColors } from '@/constants/theme';
+
 type ProfileInputModalProps = {
   visible: boolean;
   onClose: () => void;
@@ -74,7 +76,7 @@ export function ProfileInputModal({ visible, onClose }: ProfileInputModalProps) 
           <View style={styles.container}>
             <View style={styles.header}>
               <Pressable onPress={onClose} style={styles.closeButton}>
-                <Ionicons name="close" size={24} color="#11181C" />
+                <Ionicons name="close" size={24} color={DesignColors.black} />
               </Pressable>
               <Text style={styles.title}>Profile Information</Text>
               <View style={styles.placeholder} />
@@ -87,7 +89,7 @@ export function ProfileInputModal({ visible, onClose }: ProfileInputModalProps) 
               showsVerticalScrollIndicator={false}>
               <View style={styles.inputGroup}>
                 <View style={styles.inputHeader}>
-                  <Ionicons name="calendar" size={20} color="#6B7280" />
+                  <Ionicons name="calendar" size={20} color={DesignColors.gray500} />
                   <Text style={styles.inputLabel}>Age</Text>
                 </View>
                 <TextInput
@@ -104,7 +106,7 @@ export function ProfileInputModal({ visible, onClose }: ProfileInputModalProps) 
 
               <View style={styles.inputGroup}>
                 <View style={styles.inputHeader}>
-                  <Ionicons name="resize" size={20} color="#6B7280" />
+                  <Ionicons name="resize" size={20} color={DesignColors.gray500} />
                   <Text style={styles.inputLabel}>Height (cm)</Text>
                 </View>
                 <TextInput
@@ -121,7 +123,7 @@ export function ProfileInputModal({ visible, onClose }: ProfileInputModalProps) 
 
               <View style={styles.inputGroup}>
                 <View style={styles.inputHeader}>
-                  <Ionicons name="fitness" size={20} color="#6B7280" />
+                  <Ionicons name="fitness" size={20} color={DesignColors.gray500} />
                   <Text style={styles.inputLabel}>Weight (kg)</Text>
                 </View>
                 <TextInput
@@ -152,7 +154,7 @@ export function ProfileInputModal({ visible, onClose }: ProfileInputModalProps) 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
   },
   header: {
     flexDirection: 'row',
@@ -161,7 +163,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    borderBottomColor: DesignColors.gray200,
   },
   closeButton: {
     padding: 8,
@@ -169,7 +171,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   placeholder: {
     width: 40,
@@ -194,33 +196,33 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   input: {
     height: 56,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: DesignColors.gray200,
     borderRadius: 12,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#11181C',
-    backgroundColor: '#F9FAFB',
+    color: DesignColors.black,
+    backgroundColor: DesignColors.gray50,
   },
   buttonContainer: {
     paddingHorizontal: 24,
     paddingBottom: 32,
     paddingTop: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
   },
   saveButton: {
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#11181C',
+    backgroundColor: DesignColors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   saveButtonText: {
-    color: '#FFFFFF',
+    color: DesignColors.white,
     fontSize: 16,
     fontWeight: '600',
   },

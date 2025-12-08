@@ -1,8 +1,8 @@
-import { AnimationDurations, DesignColors, Layout, Spacing } from '@/constants/theme';
+import { AnimationDurations, DesignColors, Layout, Spacing, Typography } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type GoalFlowLayoutProps = {
@@ -10,6 +10,8 @@ type GoalFlowLayoutProps = {
   totalSteps: number;
   onBack?: () => void;
   children: React.ReactNode;
+  title?: string;
+  subtitle?: string;
 };
 
 export function GoalFlowLayout({
@@ -17,6 +19,8 @@ export function GoalFlowLayout({
   totalSteps,
   onBack,
   children,
+  title,
+  subtitle,
 }: GoalFlowLayoutProps) {
   const router = useRouter();
   const progressPercentage = (currentStep / totalSteps) * 100;
@@ -77,16 +81,26 @@ export function GoalFlowLayout({
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Progress bar */}
-        <View style={styles.progressBarContainer}>
-          <Animated.View
-            style={[
-              styles.progressBarFill,
-              { width: progressWidth },
-            ]}
-          />
+        <View style={styles.stepper}>
+          <Text style={styles.stepperText}>Step {currentStep} of {totalSteps}</Text>
+          <View style={styles.progressBarContainer}>
+            <Animated.View
+              style={[
+                styles.progressBarFill,
+                { width: progressWidth },
+              ]}
+            />
+          </View>
         </View>
       </View>
+
+      {/* Optional hero title/subtitle */}
+      {title ? (
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>{title}</Text>
+          {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
+        </View>
+      ) : null}
 
       {/* Content */}
       <View style={styles.content}>{children}</View>
@@ -114,15 +128,35 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     flex: 1,
-    height: 4,
+    height: 6,
     backgroundColor: DesignColors.gray200,
-    borderRadius: 2,
+    borderRadius: 3,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: '100%',
-    backgroundColor: DesignColors.black,
-    borderRadius: 2,
+    backgroundColor: DesignColors.primary,
+    borderRadius: 3,
+  },
+  stepper: {
+    flex: 1,
+    gap: Spacing.xs,
+  },
+  stepperText: {
+    ...Typography.caption,
+    color: DesignColors.gray600,
+  },
+  hero: {
+    paddingHorizontal: Layout.horizontalPadding,
+    paddingTop: Spacing.sm,
+    gap: Spacing.xs,
+  },
+  heroTitle: {
+    ...Typography.h2,
+  },
+  heroSubtitle: {
+    ...Typography.bodySmall,
+    color: DesignColors.gray600,
   },
   content: {
     flex: 1,

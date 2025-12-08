@@ -7,6 +7,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 
+import { DesignColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type Props = {
@@ -23,7 +24,7 @@ export default function ParallaxScrollView({
   children,
   headerHeight = 280,
   headerImage,
-  headerBackgroundColor = { light: '#F5F5F7', dark: '#1E1E20' },
+  headerBackgroundColor = { light: DesignColors.gray50, dark: DesignColors.black },
 }: Props) {
   const scrollY = useRef(new Animated.Value(0)).current;
   const colorScheme = useColorScheme() ?? 'light';

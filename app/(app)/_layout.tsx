@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { bootstrapSession, useSessionStore } from '@/lib/session-store';
+import { DesignColors } from '@/constants/theme';
 
 export default function AppLayout() {
   const status = useSessionStore((state) => state.status);
@@ -40,6 +41,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.background,
   },
 });

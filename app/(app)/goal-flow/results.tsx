@@ -69,7 +69,7 @@ export default function ResultsScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const { session } = useSessionStore();
   const { saveGoals } = useUserGoalsStore();
-  const { 
+  const {
     getState,
     clearState,
     unitSystem,
@@ -98,7 +98,7 @@ export default function ResultsScreen() {
         weeks: estimatedWeeksToGoal || 0
       };
     }
-    
+
     // Otherwise, calculate recommended values
     if (heightCm && weightKg && age && goalType && targetWeightKg) {
       const nutritionPlan = calculateNutritionPlan(
@@ -108,7 +108,7 @@ export default function ResultsScreen() {
         goalType,
         targetWeightKg
       );
-      
+
       return {
         calories: nutritionPlan.dailyCalories,
         protein: nutritionPlan.dailyProtein,
@@ -117,7 +117,7 @@ export default function ResultsScreen() {
         weeks: nutritionPlan.estimatedWeeksToGoal
       };
     }
-    
+
     // Fallback to 0 if no data available
     return {
       calories: 0,
@@ -140,7 +140,7 @@ export default function ResultsScreen() {
         goalType,
         targetWeightKg
       );
-      
+
       setCalculatedValues(
         nutritionPlan.dailyCalories,
         nutritionPlan.dailyProtein,
@@ -156,21 +156,21 @@ export default function ResultsScreen() {
     if (!goalType || !targetWeightKg || !recommendedValues.weeks) {
       return 'Your custom plan is ready!';
     }
-    
-    const targetWeight = unitSystem === 'imperial' 
-      ? Math.round(targetWeightKg * 2.20462) 
+
+    const targetWeight = unitSystem === 'imperial'
+      ? Math.round(targetWeightKg * 2.20462)
       : Math.round(targetWeightKg);
     const unit = unitSystem === 'imperial' ? 'lbs' : 'kg';
     const action = goalType === 'lose' ? 'lose' : 'gain';
-    
+
     // Calculate target date
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + (recommendedValues.weeks * 7));
-    const formattedDate = targetDate.toLocaleDateString('en-US', { 
-      month: 'long', 
-      day: 'numeric' 
+    const formattedDate = targetDate.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric'
     });
-    
+
     return `You should ${action}: ${targetWeight} ${unit} by ${formattedDate}`;
   };
 
@@ -202,10 +202,10 @@ export default function ResultsScreen() {
     }
 
     const state = getState();
-    
+
     // Validate all required base data is present
-    if (!state.heightCm || !state.weightKg || !state.birthdate || 
-        !state.age || !state.goalType || !state.targetWeightKg) {
+    if (!state.heightCm || !state.weightKg || !state.birthdate ||
+      !state.age || !state.goalType || !state.targetWeightKg) {
       Alert.alert('Error', 'Missing required data. Please go through the flow again.');
       return;
     }
@@ -246,10 +246,10 @@ export default function ResultsScreen() {
       if (success) {
         // Clear any pending goals
         await clearPendingGoals();
-        
+
         // Clear context state
         clearState();
-        
+
         // Navigate to home/settings
         router.replace('/(app)/(tabs)' as any);
       } else {
@@ -259,7 +259,7 @@ export default function ResultsScreen() {
       }
     } catch (error) {
       console.error('Error saving goals:', error);
-      
+
       // Store locally for later sync (use the same final values)
       const goalFlowData: GoalFlowData = {
         unitSystem: state.unitSystem,
@@ -305,7 +305,11 @@ export default function ResultsScreen() {
   };
 
   return (
-    <GoalFlowLayout currentStep={6} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={6}
+      totalSteps={6}
+      title="Congratulations your custom plan is ready!"
+      subtitle="You can edit these values anytime.">
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -314,7 +318,7 @@ export default function ResultsScreen() {
         {/* Success Header */}
         <View style={styles.header}>
           <View style={styles.checkmarkContainer}>
-            <Ionicons name="checkmark-circle" size={64} color="#10B981" />
+            <Ionicons name="checkmark-circle" size={64} color={DesignColors.success} />
           </View>
           <Text style={styles.title}>
             Congratulations your custom plan is ready!
@@ -374,7 +378,7 @@ export default function ResultsScreen() {
         {saveError ? (
           <View style={styles.errorCard}>
             <View style={styles.errorHeader}>
-              <Ionicons name="warning" size={20} color="#DC2626" />
+              <Ionicons name="warning" size={20} color={DesignColors.error} />
               <Text style={styles.errorText}>{saveError}</Text>
             </View>
             <TouchableOpacity
@@ -382,7 +386,7 @@ export default function ResultsScreen() {
               onPress={handleRetry}
               disabled={isSaving}
             >
-              <Ionicons name="refresh" size={18} color="#11181C" />
+              <Ionicons name="refresh" size={18} color={DesignColors.black} />
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
@@ -498,7 +502,7 @@ const styles = StyleSheet.create({
     backgroundColor: DesignColors.white,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: DesignColors.black,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -548,7 +552,7 @@ const styles = StyleSheet.create({
   getStartedButton: {
     height: 56,
     borderRadius: BorderRadius.round,
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Layout.sectionGap,

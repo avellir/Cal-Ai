@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 
 import type { EmailOtpType } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { DesignColors } from '@/constants/theme';
 
 type ParsedCallback = {
   params: Record<string, string>;
@@ -177,11 +178,12 @@ const styles = StyleSheet.create({
     fontSize: 20,
     marginBottom: 4,
     fontWeight: '600',
+    color: DesignColors.black,
   },
   message: {
     textAlign: 'center',
     fontSize: 16,
-    color: '#6B7280',
+    color: DesignColors.gray500,
     marginTop: 12,
   },
   cta: {
@@ -189,10 +191,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 8,
-    backgroundColor: '#0a7ea4',
+    backgroundColor: DesignColors.primary,
   },
   ctaText: {
-    color: '#FFFFFF',
+    color: DesignColors.white,
     fontWeight: '600',
   },
 });

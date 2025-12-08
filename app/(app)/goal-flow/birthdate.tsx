@@ -87,17 +87,16 @@ export default function BirthdateScreen() {
   };
 
   return (
-    <GoalFlowLayout currentStep={2} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={2}
+      totalSteps={6}
+      title="When were you born?"
+      subtitle="We use your age to calculate accurate calorie needs">
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>When were you born?</Text>
-        <Text style={styles.subtitle}>
-          We use your age to calculate accurate calorie needs
-        </Text>
-
         {/* Date Picker */}
         <View style={styles.datePickerContainer}>
           {/* Month Picker */}
@@ -295,7 +294,7 @@ const styles = StyleSheet.create({
   continueButton: {
     height: 56,
     borderRadius: BorderRadius.round,
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.xxxl,

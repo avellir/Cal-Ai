@@ -4,8 +4,13 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DesignColors } from '@/constants/theme';
 import { ProfileInputModal } from '@/components/profile-input-modal';
 import { ThemedText } from '@/components/themed-text';
+import { Card } from '@/components/ui/Card';
+import { ListRow } from '@/components/ui/ListRow';
+import { Chip } from '@/components/ui/Chip';
+import { Badge } from '@/components/ui/Badge';
 import { useSessionStore } from '@/lib/session-store';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 import { useUserProfileStore } from '@/store/userProfileStore';
@@ -14,14 +19,14 @@ export default function SettingsScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const { profile } = useUserProfileStore();
   const { session } = useSessionStore();
-  const { goals, fetchGoals, hasGoals, getDailyTargets } = useUserGoalsStore();
+  const { fetchGoals, hasGoals, getDailyTargets } = useUserGoalsStore();
 
   // Fetch goals on mount
   useEffect(() => {
     if (session?.user?.id) {
       fetchGoals(session.user.id);
     }
-  }, [session?.user?.id]);
+  }, [session?.user?.id, fetchGoals]);
 
   const handleAdjustGoals = () => {
     router.push('/(app)/goal-flow' as any);
@@ -39,14 +44,17 @@ export default function SettingsScreen() {
           </ThemedText>
         </View>
 
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Personal Information</ThemedText>
-          
+        {/* Personal Info */}
+        <Card style={styles.sectionCard} elevation="sm">
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Personal Information</ThemedText>
+            <Badge label="Required" tone="info" />
+          </View>
           {profile.age || profile.height || profile.weight ? (
             <View style={styles.profileGrid}>
               <View style={styles.profileCard}>
                 <View style={styles.profileIconContainer}>
-                  <Ionicons name="calendar" size={24} color="#6B7280" />
+                  <Ionicons name="calendar" size={24} color={DesignColors.gray500} />
                 </View>
                 <ThemedText style={styles.profileLabel}>Age</ThemedText>
                 <ThemedText style={styles.profileValue}>
@@ -56,7 +64,7 @@ export default function SettingsScreen() {
 
               <View style={styles.profileCard}>
                 <View style={styles.profileIconContainer}>
-                  <Ionicons name="resize" size={24} color="#6B7280" />
+                  <Ionicons name="resize" size={24} color={DesignColors.gray500} />
                 </View>
                 <ThemedText style={styles.profileLabel}>Height</ThemedText>
                 <ThemedText style={styles.profileValue}>
@@ -66,7 +74,7 @@ export default function SettingsScreen() {
 
               <View style={styles.profileCard}>
                 <View style={styles.profileIconContainer}>
-                  <Ionicons name="fitness" size={24} color="#6B7280" />
+                  <Ionicons name="fitness" size={24} color={DesignColors.gray500} />
                 </View>
                 <ThemedText style={styles.profileLabel}>Weight</ThemedText>
                 <ThemedText style={styles.profileValue}>
@@ -76,7 +84,7 @@ export default function SettingsScreen() {
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Ionicons name="person-circle-outline" size={48} color="#9CA3AF" />
+              <Ionicons name="person-circle-outline" size={48} color={DesignColors.gray400} />
               <ThemedText style={styles.emptyStateText}>No profile information set</ThemedText>
               <ThemedText style={styles.emptyStateSubtext}>
                 Add your age, height, and weight to get personalized recommendations
@@ -87,50 +95,64 @@ export default function SettingsScreen() {
           <Pressable 
             style={styles.editButton} 
             onPress={() => setModalVisible(true)}>
-            <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+            <Ionicons name="create-outline" size={20} color={DesignColors.white} />
             <ThemedText style={styles.editButtonText}>
               {profile.age || profile.height || profile.weight ? 'Edit Profile' : 'Add Profile Info'}
             </ThemedText>
           </Pressable>
-        </View>
+        </Card>
 
-        {/* Customization Section */}
-        <View style={styles.section}>
-          <ThemedText style={styles.sectionTitle}>Customization</ThemedText>
-          
-          {/* Personal Details Row */}
-          <Pressable 
-            style={styles.settingsRow} 
-            onPress={() => setModalVisible(true)}>
-            <View style={styles.settingsRowLeft}>
-              <View style={styles.settingsIconContainer}>
-                <Ionicons name="person-outline" size={20} color="#11181C" />
-              </View>
-              <ThemedText style={styles.settingsRowText}>Personal Details</ThemedText>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-          </Pressable>
+        {/* Goals */}
+        <Card style={styles.sectionCard} elevation="sm">
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Goals</ThemedText>
+            {hasGoals() && dailyTargets ? (
+              <Chip label={`${dailyTargets.calories} cal/day`} />
+            ) : (
+              <Badge label="Not set" tone="warning" />
+            )}
+          </View>
+          <ListRow
+            title="Personal Details"
+            subtitle="Age, height, weight"
+            onPress={() => setModalVisible(true)}
+            leftIcon={<Ionicons name="person-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
+          <ListRow
+            title="Adjust Goals"
+            subtitle={hasGoals() && dailyTargets ? `Daily target: ${dailyTargets.calories} cal` : 'Set your calorie and macro targets'}
+            onPress={handleAdjustGoals}
+            leftIcon={<Ionicons name="nutrition-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
+        </Card>
 
-          {/* Adjust Goals Row */}
-          <Pressable 
-            style={styles.settingsRow} 
-            onPress={handleAdjustGoals}>
-            <View style={styles.settingsRowLeft}>
-              <View style={styles.settingsIconContainer}>
-                <Ionicons name="nutrition-outline" size={20} color="#11181C" />
-              </View>
-              <View style={styles.settingsRowContent}>
-                <ThemedText style={styles.settingsRowText}>Adjust Goals</ThemedText>
-                {hasGoals() && dailyTargets && (
-                  <ThemedText style={styles.settingsRowSubtext}>
-                    Daily target: {dailyTargets.calories} calories
-                  </ThemedText>
-                )}
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-          </Pressable>
-        </View>
+        {/* Preferences */}
+        <Card style={styles.sectionCard} elevation="sm">
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Preferences</ThemedText>
+            <Badge label="Coming soon" tone="neutral" />
+          </View>
+          <ListRow
+            title="Units"
+            subtitle="Metric"
+            leftIcon={<Ionicons name="swap-horizontal" size={20} color={DesignColors.black} />}
+            accessory={<Chip label="Metric" selected />}
+          />
+          <ListRow
+            title="Reminders"
+            subtitle="Set meal reminders"
+            leftIcon={<Ionicons name="alarm-outline" size={20} color={DesignColors.black} />}
+            accessory={<Badge label="Off" tone="neutral" />}
+          />
+          <ListRow
+            title="Theme"
+            subtitle="Light"
+            leftIcon={<Ionicons name="color-palette-outline" size={20} color={DesignColors.black} />}
+            accessory={<Badge label="Light" tone="neutral" />}
+          />
+        </Card>
       </ScrollView>
 
       <ProfileInputModal 
@@ -144,7 +166,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.background,
   },
   content: {
     flexGrow: 1,
@@ -156,7 +178,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   subtitle: {
-    color: '#6B7280',
+    color: DesignColors.gray600,
   },
   section: {
     gap: 20,
@@ -164,7 +186,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   profileGrid: {
     flexDirection: 'row',
@@ -172,19 +194,19 @@ const styles = StyleSheet.create({
   },
   profileCard: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DesignColors.gray50,
     borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: DesignColors.gray200,
   },
   profileIconContainer: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 4,
@@ -192,13 +214,13 @@ const styles = StyleSheet.create({
   profileLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: '#6B7280',
+    color: DesignColors.gray500,
     textAlign: 'center',
   },
   profileValue: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
     textAlign: 'center',
   },
   emptyState: {
@@ -209,11 +231,11 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#6B7280',
+    color: DesignColors.gray500,
   },
   emptyStateSubtext: {
     fontSize: 14,
-    color: '#9CA3AF',
+    color: DesignColors.gray500,
     textAlign: 'center',
     lineHeight: 20,
   },
@@ -224,10 +246,10 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#11181C',
+    backgroundColor: DesignColors.primary,
   },
   editButtonText: {
-    color: '#FFFFFF',
+    color: DesignColors.white,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -235,11 +257,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DesignColors.gray50,
     borderRadius: 16,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: DesignColors.gray200,
   },
   settingsRowLeft: {
     flexDirection: 'row',
@@ -251,7 +273,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -262,11 +284,11 @@ const styles = StyleSheet.create({
   settingsRowText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   settingsRowSubtext: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#6B7280',
+    color: DesignColors.gray500,
   },
 });

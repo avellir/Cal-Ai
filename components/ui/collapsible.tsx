@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { Colors } from '@/constants/theme';
+import { Colors, DesignColors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -29,7 +29,7 @@ export function Collapsible({ title, children, defaultOpen = false }: Props) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const colorScheme = useColorScheme() ?? 'light';
   const backgroundColor = useMemo(
-    () => (colorScheme === 'light' ? '#F5F5F7' : '#1E1E20'),
+    () => (colorScheme === 'light' ? DesignColors.gray50 : Colors.dark.background),
     [colorScheme]
   );
 

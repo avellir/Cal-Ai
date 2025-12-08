@@ -4,6 +4,8 @@ import { Platform, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Ionicons } from '@expo/vector-icons';
 
+import { DesignColors } from '@/constants/theme';
+
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
 
 type Props = {
@@ -21,7 +23,7 @@ const FALLBACK_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
   'gearshape.fill': 'settings-sharp',
 };
 
-export function IconSymbol({ name, size = 24, color = '#000000', style }: Props) {
+export function IconSymbol({ name, size = 24, color = DesignColors.black, style }: Props) {
   if (Platform.OS === 'ios') {
     return <SymbolView name={name} tintColor={color} resizeMode="scaleAspectFit" style={[styles.symbol, { width: size, height: size }, style]} />;
   }

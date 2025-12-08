@@ -4,6 +4,9 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Card } from '@/components/ui/Card';
+import { Chip } from '@/components/ui/Chip';
+import { DesignColors } from '@/constants/theme';
 import { analyzeAdvancedFoodImage } from '@/services/foodAnalysis';
 
 export default function CameraScreen() {
@@ -13,7 +16,7 @@ export default function CameraScreen() {
     try {
       // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert(
           'Permission Required',
@@ -43,7 +46,7 @@ export default function CameraScreen() {
     try {
       // Request media library permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
+
       if (status !== 'granted') {
         Alert.alert(
           'Permission Required',
@@ -71,10 +74,10 @@ export default function CameraScreen() {
 
   const analyzeImage = async (imageUri: string) => {
     setIsAnalyzing(true);
-    
+
     try {
       const result = await analyzeAdvancedFoodImage(imageUri);
-      
+
       setIsAnalyzing(false);
 
       if (result.success && result.data) {
@@ -95,6 +98,19 @@ export default function CameraScreen() {
             confidence: result.data.confidence.toString(),
             imageUri,
             reasoning: result.data.reasoning || '',
+            warnings: result.data.warnings?.length ? JSON.stringify(result.data.warnings) : undefined,
+            // Pass ingredient breakdown for transparency
+            ingredientsData: result.data.ingredients?.length
+              ? JSON.stringify(result.data.ingredients.map(ing => ({
+                  name: ing.name,
+                  quantity: ing.grams,
+                  unit: 'g',
+                  calories: ing.calories,
+                  protein: ing.protein,
+                  carbs: ing.carbs,
+                  fat: ing.fat,
+                })))
+              : undefined,
           },
         });
       } else {
@@ -113,7 +129,7 @@ export default function CameraScreen() {
   if (isAnalyzing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#11181C" />
+        <ActivityIndicator size="large" color={DesignColors.black} />
         <Text style={styles.loadingText}>Analyzing your food...</Text>
         <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
       </View>
@@ -125,16 +141,31 @@ export default function CameraScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Add Food</Text>
         <Pressable onPress={() => router.back()} style={styles.closeButton}>
-          <Feather name="x" size={24} color="#11181C" />
+          <Feather name="x" size={24} color={DesignColors.black} />
         </Pressable>
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.subtitle}>How would you like to add your meal?</Text>
+        <Card style={styles.heroCard} elevation="md">
+          <View style={styles.heroHeader}>
+            <View style={styles.heroIcon}>
+              <Feather name="camera" size={20} color={DesignColors.primary} />
+            </View>
+            <View style={styles.heroCopy}>
+              <Text style={styles.heroTitle}>Best results</Text>
+              <Text style={styles.heroSubtitle}>Good lighting, one plate per shot</Text>
+            </View>
+          </View>
+          <View style={styles.heroChips}>
+            <Chip label="Avoid glare" />
+            <Chip label="Center the plate" />
+            <Chip label="Hold steady" />
+          </View>
+        </Card>
 
         <Pressable style={styles.optionCard} onPress={handleTakePhoto}>
           <View style={styles.iconContainer}>
-            <Feather name="camera" size={32} color="#11181C" />
+            <Feather name="camera" size={32} color={DesignColors.black} />
           </View>
           <View style={styles.optionContent}>
             <Text style={styles.optionTitle}>Take Photo</Text>
@@ -142,12 +173,12 @@ export default function CameraScreen() {
               Capture a photo of your meal using your camera
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#9CA3AF" />
+          <Feather name="chevron-right" size={20} color={DesignColors.gray400} />
         </Pressable>
 
         <Pressable style={styles.optionCard} onPress={handleChoosePhoto}>
           <View style={styles.iconContainer}>
-            <Feather name="image" size={32} color="#11181C" />
+            <Feather name="image" size={32} color={DesignColors.black} />
           </View>
           <View style={styles.optionContent}>
             <Text style={styles.optionTitle}>Choose from Library</Text>
@@ -155,11 +186,11 @@ export default function CameraScreen() {
               Select an existing photo from your gallery
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#9CA3AF" />
+          <Feather name="chevron-right" size={20} color={DesignColors.gray400} />
         </Pressable>
 
         <View style={styles.infoBox}>
-          <Feather name="info" size={16} color="#6B7280" />
+          <Feather name="info" size={16} color={DesignColors.gray500} />
           <Text style={styles.infoText}>
             Our AI will analyze your food and provide nutritional information
           </Text>
@@ -172,11 +203,11 @@ export default function CameraScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
   },
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 16,
@@ -184,11 +215,11 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   loadingSubtext: {
     fontSize: 14,
-    color: '#6B7280',
+    color: DesignColors.gray500,
   },
   header: {
     flexDirection: 'row',
@@ -201,13 +232,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   closeButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: DesignColors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -217,26 +248,54 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     gap: 16,
   },
-  subtitle: {
+  heroCard: {
+    gap: 12,
+  },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  heroIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: DesignColors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroCopy: {
+    flex: 1,
+  },
+  heroTitle: {
     fontSize: 16,
-    color: '#6B7280',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: DesignColors.black,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: DesignColors.gray500,
+  },
+  heroChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   optionCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F9FAFB',
+    backgroundColor: DesignColors.gray50,
     borderRadius: 20,
     padding: 20,
     gap: 16,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: DesignColors.gray200,
   },
   iconContainer: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.white,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,11 +306,11 @@ const styles = StyleSheet.create({
   optionTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#11181C',
+    color: DesignColors.black,
   },
   optionDescription: {
     fontSize: 14,
-    color: '#6B7280',
+    color: DesignColors.gray500,
     lineHeight: 20,
   },
   infoBox: {
@@ -260,15 +319,15 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 24,
     padding: 16,
-    backgroundColor: '#F0F9FF',
+    backgroundColor: DesignColors.infoBg,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: DesignColors.info,
   },
   infoText: {
     flex: 1,
     fontSize: 13,
-    color: '#1E40AF',
+    color: DesignColors.info,
     lineHeight: 18,
   },
 });

@@ -32,24 +32,23 @@ export default function GoalSelectionScreen() {
 
   const handleContinue = () => {
     if (!selectedGoal) return;
-    
+
     // Save to context
     setGoal(selectedGoal);
     router.push('/goal-flow/target-weight');
   };
 
   return (
-    <GoalFlowLayout currentStep={3} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={3}
+      totalSteps={6}
+      title="What is your goal?"
+      subtitle="Choose your fitness objective to get personalized recommendations">
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>What is your goal?</Text>
-        <Text style={styles.subtitle}>
-          Choose your fitness objective to get personalized recommendations
-        </Text>
-
         {/* Goal Cards */}
         <View style={styles.goalsContainer}>
           {/* Lose Weight Card */}
@@ -65,7 +64,7 @@ export default function GoalSelectionScreen() {
               <Ionicons
                 name="trending-down"
                 size={32}
-                color={selectedGoal === 'lose' ? '#FFFFFF' : '#11181C'}
+                color={selectedGoal === 'lose' ? DesignColors.white : DesignColors.black}
               />
             </View>
             <Text
@@ -99,7 +98,7 @@ export default function GoalSelectionScreen() {
               <Ionicons
                 name="trending-up"
                 size={32}
-                color={selectedGoal === 'gain' ? '#FFFFFF' : '#11181C'}
+                color={selectedGoal === 'gain' ? DesignColors.white : DesignColors.black}
               />
             </View>
             <Text
@@ -171,14 +170,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   goalCardActive: {
-    backgroundColor: DesignColors.black,
-    borderColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
+    borderColor: DesignColors.primary,
   },
   goalIconContainer: {
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+    backgroundColor: DesignColors.gray100,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.lg,
@@ -205,7 +204,7 @@ const styles = StyleSheet.create({
   continueButton: {
     height: 56,
     borderRadius: BorderRadius.round,
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.xxxl,

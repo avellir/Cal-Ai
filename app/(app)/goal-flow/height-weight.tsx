@@ -121,17 +121,16 @@ export default function HeightWeightScreen() {
   };
 
   return (
-    <GoalFlowLayout currentStep={1} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={1}
+      totalSteps={6}
+      title="Height & weight"
+      subtitle="This helps us calculate your personalized nutrition goals">
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Height & weight</Text>
-        <Text style={styles.subtitle}>
-          This helps us calculate your personalized nutrition goals
-        </Text>
-
         {/* Unit System Toggle */}
         <View style={styles.toggleContainer}>
           <TouchableOpacity
@@ -329,7 +328,7 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
   toggleButtonActive: {
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
   },
   toggleText: {
     fontSize: 16,
@@ -380,7 +379,7 @@ const styles = StyleSheet.create({
   continueButton: {
     height: 56,
     borderRadius: BorderRadius.round,
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.xxxl,

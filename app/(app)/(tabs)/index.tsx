@@ -1,18 +1,24 @@
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useEffect, type ComponentProps } from 'react';
+import { Droplet, Fish, Leaf, type LucideIcon } from 'lucide-react-native';
+import { useEffect } from 'react';
 import {
-    ActivityIndicator,
-    Dimensions,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MacroStatCard } from '@/components/MacroStatCard';
+import { Card } from '@/components/ui/Card';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
 import { aggregateDailyNutrition } from '@/services/nutritionAggregation';
@@ -28,33 +34,37 @@ const DAYS = [
   { label: 'M', date: '28', state: 'future' as const },
 ];
 
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
+type MacroKey = 'protein' | 'carbs' | 'fat';
 
 type MacroCardConfig = {
+  key: MacroKey;
   label: string;
-  icon: IoniconName;
+  Icon: LucideIcon;
   iconColor: string;
-  badgeColor: string;
+  iconBg: string;
 };
 
 const MACRO_CONFIGS: MacroCardConfig[] = [
   {
-    label: 'Protein left',
-    icon: 'fish',
-    iconColor: '#FF7A7A',
-    badgeColor: '#FFEFF1',
+    key: 'protein',
+    label: 'Protein',
+    Icon: Fish,
+    iconColor: DesignColors.protein,
+    iconBg: '#FFE8EC',
   },
   {
-    label: 'Carbs left',
-    icon: 'leaf',
-    iconColor: '#7C8BFF',
-    badgeColor: '#EEF0FF',
+    key: 'carbs',
+    label: 'Carbs',
+    Icon: Leaf,
+    iconColor: DesignColors.carbs,
+    iconBg: '#FFF4D5',
   },
   {
-    label: 'Fat left',
-    icon: 'water',
-    iconColor: '#48C7F0',
-    badgeColor: '#E6F7FF',
+    key: 'fat',
+    label: 'Fat',
+    Icon: Droplet,
+    iconColor: DesignColors.fat,
+    iconBg: '#E8F1FF',
   },
 ];
 
@@ -71,7 +81,6 @@ export default function HomeScreen() {
   const recentMeal = meals[0] ?? null;
 
   // User goals state
-  const goals = useUserGoalsStore((state) => state.goals);
   const fetchGoals = useUserGoalsStore((state) => state.fetchGoals);
   const hasGoals = useUserGoalsStore((state) => state.hasGoals);
   const getDailyTargets = useUserGoalsStore((state) => state.getDailyTargets);
@@ -99,6 +108,16 @@ export default function HomeScreen() {
     ? Math.min(100, Math.round((dailyTotals.calories / dailyTargets.calories) * 100))
     : 0;
 
+  const macroProgress = {
+    protein: dailyTargets && dailyTargets.protein > 0 ? Math.min(1, dailyTotals.protein / dailyTargets.protein) : 0,
+    carbs: dailyTargets && dailyTargets.carbs > 0 ? Math.min(1, dailyTotals.carbs / dailyTargets.carbs) : 0,
+    fat: dailyTargets && dailyTargets.fat > 0 ? Math.min(1, dailyTotals.fat / dailyTargets.fat) : 0,
+  };
+
+  const guidanceMessage = hasGoals()
+    ? null // Will render formatted text inline
+    : 'Set your goals to see personalized guidance.';
+
   useEffect(() => {
     if (!userId) {
       return;
@@ -119,14 +138,12 @@ export default function HomeScreen() {
   const mealDisplay = recentMeal
     ? {
         title: recentMeal.name,
-        note: recentMeal.note ?? 'Captured via Cal AI camera',
         timestamp: formatMealTimestamp(recentMeal.timestamp),
-        calories: `${Math.round(recentMeal.calories)} kcal`,
-        macros: [
-          { label: 'Protein', value: `${Math.round(recentMeal.macros.protein)}g` },
-          { label: 'Carbs', value: `${Math.round(recentMeal.macros.carbs)}g` },
-          { label: 'Fat', value: `${Math.round(recentMeal.macros.fat)}g` },
-        ],
+        calories: Math.round(recentMeal.calories),
+        protein: Math.round(recentMeal.macros.protein),
+        carbs: Math.round(recentMeal.macros.carbs),
+        fat: Math.round(recentMeal.macros.fat),
+        imageUri: recentMeal.imageUri ?? null,
       }
     : null;
 
@@ -160,7 +177,7 @@ export default function HomeScreen() {
             'rgba(255, 255, 255, 0)',
             'rgba(250, 250, 250, 0.3)',
             'rgba(248, 248, 248, 0.6)',
-            '#ffffff',
+            DesignColors.white,
           ]}
           locations={[0, 0.3, 0.7, 1]}
           style={[
@@ -180,121 +197,110 @@ export default function HomeScreen() {
               <Text style={styles.brandText}>Cal AI</Text>
             </View>
             <View style={styles.streakPill}>
-              <Feather name="flame" size={16} color="#FF7A00" />
+              <Feather name="flame" size={16} color={DesignColors.warning} />
               <Text style={styles.streakValue}>0</Text>
             </View>
           </View>
 
-          <View style={styles.dayStrip}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.dayStrip}>
             {DAYS.map((day) => {
               const isActive = day.state === 'active';
               const isFuture = day.state === 'future';
               return (
-                <View key={`${day.label}-${day.date}`} style={styles.dayItem}>
-                  <View
-                    style={[
-                      styles.dayBadge,
-                      isActive && styles.dayBadgeActive,
-                      isFuture && styles.dayBadgeFuture,
-                    ]}>
-                    <Text
-                      style={[
-                        styles.dayLabel,
-                        isActive && styles.dayLabelActive,
-                        isFuture && styles.dayLabelFuture,
-                      ]}>
-                      {day.label}
-                    </Text>
-                  </View>
-                  <Text
-                    style={[
-                      styles.dayNumber,
-                      isActive && styles.dayNumberActive,
-                      isFuture && styles.dayNumberFuture,
-                    ]}>
+                <Pressable
+                  key={`${day.label}-${day.date}`}
+                  style={[
+                    styles.dayPill,
+                    isActive && styles.dayPillActive,
+                    isFuture && styles.dayPillFuture,
+                  ]}>
+                  <Text style={[styles.dayPillLabel, isActive && styles.dayPillLabelActive, isFuture && styles.dayPillLabelFuture]}>
+                    {day.label}
+                  </Text>
+                  <Text style={[styles.dayPillNumber, isActive && styles.dayPillNumberActive, isFuture && styles.dayPillNumberFuture]}>
                     {day.date}
                   </Text>
-                </View>
+                </Pressable>
               );
             })}
-          </View>
+          </ScrollView>
 
-          <Pressable
-            style={styles.calorieCard}
-            onPress={() => {
-              if (!hasGoals()) {
-                router.push('/goal-flow/height-weight' as any);
-              }
-            }}
-            disabled={hasGoals()}>
+          <Card elevation="md" style={styles.calorieCard}>
             <View style={styles.calorieCopy}>
               {hasGoals() ? (
                 <>
-                  <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
-                  <Text style={styles.calorieLabel}>Calories left</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={styles.calorieValue}>Set Goals</Text>
+              <Text style={styles.overline}>Today</Text>
+              <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
+              <Text style={styles.calorieLabel}>Calories left</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.overline}>Goals</Text>
+              <Text style={styles.calorieValue}>Set Goals</Text>
                   <Text style={styles.calorieLabel}>Tap to configure your targets</Text>
                 </>
               )}
             </View>
-            <View style={styles.calorieRing}>
-              <View 
-                style={[
-                  styles.calorieRingProgress,
-                  {
-                    transform: [{ rotate: `${(percentageConsumed * 3.6) - 90}deg` }],
-                    opacity: hasGoals() ? 1 : 0,
-                  }
-                ]}
-              />
-              <View style={styles.calorieRingInner}>
-                <Feather name="flame" size={24} color="#11181C" />
-              </View>
+            <View style={styles.ringWrapper}>
+              <ProgressRing
+                value={hasGoals() ? percentageConsumed : 0}
+                size={120}
+                strokeWidth={10}
+                color={DesignColors.primary}
+                backgroundColor={DesignColors.gray200}>
+                <View style={styles.ringContent}>
+                  <Text style={styles.ringPercent}>{hasGoals() ? `${percentageConsumed}%` : ''}</Text>
+                  <Text style={styles.ringUnit}>of goal</Text>
+                </View>
+              </ProgressRing>
             </View>
-          </Pressable>
+          </Card>
+
+          <Text style={styles.guidanceText}>
+            {hasGoals()
+              ? `You are on track with ${Math.round(caloriesRemaining)} calories remaining.`
+              : 'Set your goals to see personalized guidance.'}
+          </Text>
 
           <View style={styles.macroRow}>
             {MACRO_CONFIGS.map((config, index) => {
               let value = '0g';
-              
+              let progressValue = 0;
               if (hasGoals()) {
-                if (index === 0) {
-                  // Protein
-                  value = `${Math.round(proteinRemaining)}g`;
-                } else if (index === 1) {
-                  // Carbs
-                  value = `${Math.round(carbsRemaining)}g`;
-                } else if (index === 2) {
-                  // Fat
-                  value = `${Math.round(fatRemaining)}g`;
+                if (config.key === 'protein') {
+                  value = `${Math.round(proteinRemaining)}`;
+                  progressValue = macroProgress.protein;
+                } else if (config.key === 'carbs') {
+                  value = `${Math.round(carbsRemaining)}`;
+                  progressValue = macroProgress.carbs;
+                } else if (config.key === 'fat') {
+                  value = `${Math.round(fatRemaining)}`;
+                  progressValue = macroProgress.fat;
                 }
               }
-              
+
               return (
-                <View key={config.label} style={styles.macroCard}>
-                  <View style={[styles.macroBadge, { backgroundColor: config.badgeColor }]}>
-                    <Ionicons name={config.icon} size={18} color={config.iconColor} />
-                  </View>
-                  <Text style={styles.macroValue}>{value}</Text>
-                  <Text style={styles.macroLabel}>{config.label}</Text>
-                </View>
+                <MacroStatCard
+                  key={config.label}
+                  label={config.label}
+                  value={Number.parseFloat(value) || 0}
+                  percent={progressValue * 100}
+                  color={config.iconColor}
+                  iconBg={config.iconBg}
+                  Icon={config.Icon}
+                />
               );
             })}
-          </View>
-
-          <View style={styles.carouselDots}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
           </View>
 
           <View style={styles.recentSection}>
             <Text style={styles.sectionTitle}>Recently logged</Text>
             {isInitialLoading ? (
               <View style={styles.recentEmptyCard}>
-                <ActivityIndicator size="small" color="#11181C" />
+                <ActivityIndicator size="small" color={DesignColors.black} />
                 <Text style={styles.recentNote}>Loading your latest meals...</Text>
               </View>
             ) : mealError ? (
@@ -305,23 +311,28 @@ export default function HomeScreen() {
             ) : mealDisplay ? (
               <View style={styles.recentCard}>
                 <View style={styles.recentRow}>
-                  <View style={styles.recentDetails}>
-                    <Text style={styles.recentHeadline}>{mealDisplay.title}</Text>
-                    <Text style={styles.recentTimestamp}>{mealDisplay.timestamp}</Text>
-                    <Text style={styles.recentNote}>{mealDisplay.note}</Text>
-                  </View>
-                  <View style={styles.recentCaloriesPill}>
-                    <Text style={styles.recentCaloriesLabel}>Calories</Text>
-                    <Text style={styles.recentCaloriesValue}>{mealDisplay.calories}</Text>
-                  </View>
-                </View>
-                <View style={styles.recentMacroRow}>
-                  {mealDisplay.macros.map((macro) => (
-                    <View key={macro.label} style={styles.recentMacroPill}>
-                      <Text style={styles.recentMacroLabel}>{macro.label}</Text>
-                      <Text style={styles.recentMacroValue}>{macro.value}</Text>
+                  {mealDisplay.imageUri ? (
+                    <Image source={{ uri: mealDisplay.imageUri }} style={styles.recentImage} />
+                  ) : (
+                    <View style={styles.recentImagePlaceholder}>
+                      <Text style={styles.recentImageEmoji}>🍽️</Text>
                     </View>
-                  ))}
+                  )}
+                  <View style={styles.recentContent}>
+                    <View style={styles.recentHeader}>
+                      <Text style={styles.recentHeadline} numberOfLines={1}>{mealDisplay.title}</Text>
+                      <Pressable style={styles.recentMoreBtn}>
+                        <Feather name="more-horizontal" size={20} color={DesignColors.gray400} />
+                      </Pressable>
+                    </View>
+                    <Text style={styles.recentTimestamp}>{mealDisplay.timestamp}</Text>
+                    <View style={styles.recentMacroRow}>
+                      <Text style={styles.recentMacroItem}>🔥 {mealDisplay.calories} Cal</Text>
+                      <Text style={styles.recentMacroItem}>🍗 {mealDisplay.protein}g</Text>
+                      <Text style={styles.recentMacroItem}>🌾 {mealDisplay.carbs}g</Text>
+                      <Text style={styles.recentMacroItem}>🥑 {mealDisplay.fat}g</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
             ) : (
@@ -340,7 +351,8 @@ export default function HomeScreen() {
           accessibilityLabel="Add a new entry"
           style={styles.fab}
           onPress={() => router.push('/(app)/camera')}>
-          <Feather name="plus" size={28} color="#FFFFFF" />
+          <Feather name="plus" size={24} color={DesignColors.white} />
+          <Text style={styles.fabLabel}>Add meal</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -365,14 +377,68 @@ function formatMealTimestamp(timestamp: number): string {
   return `${dayLabel} • ${timeFormatter.format(date)}`;
 }
 
+type ParsedIngredient = {
+  name: string;
+  quantity: string;
+};
+
+function parseMealDescription(text?: string | null): ParsedIngredient[] {
+  if (!text) return [];
+
+  return text
+    .split(/[\n,]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const dividerMatch = part.match(/^(.*?)[-:]+\s*(.+)$/);
+      if (dividerMatch) {
+        return {
+          name: dividerMatch[1].trim(),
+          quantity: dividerMatch[2].trim(),
+        };
+      }
+
+      const lastSpace = part.lastIndexOf(' ');
+      if (lastSpace > 0) {
+        return {
+          name: part.slice(0, lastSpace).trim(),
+          quantity: part.slice(lastSpace + 1).trim(),
+        };
+      }
+
+      return { name: part, quantity: '' };
+    });
+}
+
+function IngredientList({ description }: { description?: string | null }) {
+  const ingredients = parseMealDescription(description);
+  if (!ingredients.length) return null;
+
+  return (
+    <View style={styles.ingredientList}>
+      {ingredients.map((item, index) => {
+        const isLast = index === ingredients.length - 1;
+        return (
+          <View
+            key={`${item.name}-${index}`}
+            style={[styles.ingredientRow, isLast && styles.ingredientRowLast]}>
+            <Text style={styles.ingredientName}>{item.name}</Text>
+            <Text style={styles.ingredientQuantity}>{item.quantity || '—'}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: DesignColors.background,
   },
   root: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: DesignColors.background,
   },
   gradient: {
     position: 'absolute',
@@ -406,147 +472,121 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   brandText: {
-    fontSize: 22,
-    color: '#11181C',
-    fontWeight: '700',
+    ...Typography.h2,
   },
   streakPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFECDD',
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.round,
+    backgroundColor: DesignColors.warningBg,
   },
   streakValue: {
-    color: '#FF7A00',
-    fontWeight: '600',
+    color: DesignColors.warningDark,
+    fontWeight: '700',
   },
   dayStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.xs,
   },
-  dayItem: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  dayBadge: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#E1E4F1',
+  dayPill: {
+    width: 56,
+    height: 64,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: DesignColors.gray200,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: Spacing.sm,
+    backgroundColor: DesignColors.white,
+    shadowColor: DesignColors.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  dayBadgeActive: {
-    backgroundColor: '#11181C',
-    borderStyle: 'solid',
-    borderColor: '#11181C',
+  dayPillActive: {
+    borderColor: DesignColors.primary,
+    backgroundColor: DesignColors.primaryBg,
   },
-  dayBadgeFuture: {
-    borderColor: '#E6E7F2',
+  dayPillFuture: {
+    opacity: 0.7,
   },
-  dayLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
+  dayPillLabel: {
+    ...Typography.caption,
+    color: DesignColors.gray600,
   },
-  dayLabelActive: {
-    color: '#FFFFFF',
+  dayPillLabelActive: {
+    color: DesignColors.primaryDark,
   },
-  dayLabelFuture: {
-    color: '#D1D5DB',
+  dayPillLabelFuture: {
+    color: DesignColors.gray400,
   },
-  dayNumber: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    fontWeight: '600',
+  dayPillNumber: {
+    ...Typography.bodyBold,
+    color: DesignColors.black,
   },
-  dayNumberActive: {
-    color: '#11181C',
+  dayPillNumberActive: {
+    color: DesignColors.primaryDark,
   },
-  dayNumberFuture: {
-    color: '#D1D5DB',
+  dayPillNumberFuture: {
+    color: DesignColors.gray400,
   },
   calorieCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 28,
-    padding: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.06,
-    shadowRadius: 16,
-    elevation: 8,
+  },
+  overline: {
+    ...Typography.label,
+    color: DesignColors.gray500,
   },
   calorieCopy: {
     gap: 6,
   },
   calorieValue: {
-    fontSize: 42,
-    color: '#11181C',
-    fontWeight: '700',
+    ...Typography.displayMedium,
+    color: DesignColors.black,
   },
   calorieLabel: {
-    fontSize: 16,
-    color: '#6B7280',
-    fontWeight: '500',
+    ...Typography.bodySmall,
+    color: DesignColors.gray600,
   },
-  calorieRing: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 12,
-    borderColor: '#EFEFF7',
+  ringWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
-  calorieRingProgress: {
-    position: 'absolute',
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 12,
-    borderColor: '#11181C',
-    borderTopColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderBottomColor: 'transparent',
-  },
-  calorieRingInner: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#F9F8FD',
+  ringContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
+    gap: 4,
+  },
+  ringPercent: {
+    ...Typography.bodyBold,
+    color: DesignColors.black,
+  },
+  ringUnit: {
+    ...Typography.caption,
+    color: DesignColors.gray500,
+  },
+  guidanceText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DesignColors.gray600,
+    textAlign: 'center',
   },
   macroRow: {
     flexDirection: 'row',
     gap: 12,
   },
-  macroCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#EEF0FF',
-    borderRadius: 22,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
+  macroHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    elevation: 4,
+    justifyContent: 'flex-start',
+    gap: Spacing.sm,
   },
   macroBadge: {
     width: 42,
@@ -556,140 +596,135 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   macroValue: {
-    fontSize: 20,
-    color: '#11181C',
-    fontWeight: '700',
+    ...Typography.displayMedium,
+    color: DesignColors.black,
   },
   macroLabel: {
-    fontSize: 12,
-    textAlign: 'center',
-    color: '#6B7280',
-  },
-  carouselDots: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  dot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#DADDE8',
-  },
-  dotActive: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#11181C',
+    ...Typography.caption,
+    textAlign: 'left',
+    color: DesignColors.gray600,
   },
   recentSection: {
     gap: 12,
   },
   sectionTitle: {
     fontSize: 18,
-    color: '#11181C',
+    color: DesignColors.black,
     fontWeight: '600',
   },
   recentCard: {
-    backgroundColor: '#F9F8FD',
-    borderRadius: 24,
-    padding: 20,
-    gap: 16,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 12,
   },
   recentEmptyCard: {
-    backgroundColor: '#F9F8FD',
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#ECECF2',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    padding: 16,
     gap: 8,
-  },
-  recentHeadline: {
-    fontSize: 16,
-    color: '#11181C',
-    fontWeight: '600',
   },
   recentRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  recentDetails: {
-    flex: 1,
-    gap: 6,
-    paddingRight: 12,
+  recentImage: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
   },
-  recentTimestamp: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  recentNote: {
-    fontSize: 14,
-    color: '#6B7280',
-    lineHeight: 20,
-  },
-  recentCaloriesPill: {
+  recentImagePlaceholder: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    backgroundColor: DesignColors.gray200,
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E6E7F2',
-    minWidth: 110,
+    justifyContent: 'center',
+  },
+  recentImageEmoji: {
+    fontSize: 24,
+  },
+  recentContent: {
+    flex: 1,
     gap: 4,
   },
-  recentCaloriesLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  recentCaloriesValue: {
+  recentHeadline: {
     fontSize: 16,
-    color: '#11181C',
-    fontWeight: '600',
+    color: DesignColors.black,
+    fontWeight: '700',
+    flex: 1,
+  },
+  recentMoreBtn: {
+    padding: 4,
+  },
+  recentTimestamp: {
+    fontSize: 13,
+    color: DesignColors.gray500,
   },
   recentMacroRow: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 4,
   },
-  recentMacroPill: {
+  recentMacroItem: {
+    fontSize: 13,
+    color: DesignColors.black,
+    fontWeight: '500',
+  },
+  recentNote: {
+    fontSize: 14,
+    color: DesignColors.gray500,
+    lineHeight: 20,
+  },
+  ingredientList: {
+    marginTop: 6,
+  },
+  ingredientRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: DesignColors.gray100,
+  },
+  ingredientRowLast: {
+    borderBottomWidth: 0,
+  },
+  ingredientName: {
+    ...Typography.bodySmallBold,
+    color: DesignColors.black,
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: '#EEF0FF',
-    gap: 4,
+    paddingRight: 8,
   },
-  recentMacroLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  recentMacroValue: {
-    fontSize: 15,
-    color: '#11181C',
-    fontWeight: '600',
+  ingredientQuantity: {
+    ...Typography.bodySmall,
+    color: DesignColors.gray600,
   },
   fab: {
     position: 'absolute',
     right: 24,
     bottom: 24,
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: '#11181C',
+    paddingHorizontal: Spacing.lg,
+    height: 64,
+    borderRadius: BorderRadius.round,
+    flexDirection: 'row',
+    gap: Spacing.sm,
+    backgroundColor: '#171717',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#11181C',
+    shadowColor: '#171717',
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.24,
+    shadowOpacity: 0.4,
     shadowRadius: 18,
     elevation: 10,
+  },
+  fabLabel: {
+    ...Typography.bodyBold,
+    color: DesignColors.white,
   },
 });

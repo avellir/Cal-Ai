@@ -1,7 +1,8 @@
+import { Redirect, Slot } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { Redirect, Slot } from 'expo-router';
 
+import { DesignColors } from '@/constants/theme';
 import { bootstrapSession, useSessionStore } from '@/lib/session-store';
 
 export default function PublicLayout() {
@@ -32,6 +33,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: DesignColors.background,
   },
 });

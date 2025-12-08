@@ -8,36 +8,36 @@ import { useGoalFlow } from './GoalFlowContext';
 
 export default function TargetWeightScreen() {
   const router = useRouter();
-  const { 
-    setTargetWeight: saveTargetWeight, 
-    unitSystem, 
-    weightKg, 
+  const {
+    setTargetWeight: saveTargetWeight,
+    unitSystem,
+    weightKg,
     goalType,
-    targetWeightKg: savedTargetWeightKg 
+    targetWeightKg: savedTargetWeightKg
   } = useGoalFlow();
-  
+
   // Get current weight from context
   const currentWeightKg = weightKg || 70;
   const currentWeightLbs = Math.round(currentWeightKg * 2.20462);
-  
+
   // Initialize target weight
   const defaultTargetKg = savedTargetWeightKg || (goalType === 'lose' ? currentWeightKg - 5 : currentWeightKg + 5);
   const defaultTargetLbs = Math.round(defaultTargetKg * 2.20462);
-  
+
   const [targetWeight, setTargetWeight] = useState<number>(
     unitSystem === 'imperial' ? defaultTargetLbs : defaultTargetKg
   );
 
   const currentWeight = unitSystem === 'imperial' ? currentWeightLbs : currentWeightKg;
   const weightDifference = Math.abs(targetWeight - currentWeight);
-  
+
   // Unrealistic threshold in the current unit system
   const UNREALISTIC_THRESHOLD = unitSystem === 'imperial' ? 50 : 23; // ~50 lbs or ~23 kg
   const isRealistic = weightDifference <= UNREALISTIC_THRESHOLD;
-  
+
   // Check if target weight matches goal type
-  const isValidForGoal = goalType === 'lose' 
-    ? targetWeight < currentWeight 
+  const isValidForGoal = goalType === 'lose'
+    ? targetWeight < currentWeight
     : targetWeight > currentWeight;
 
   const buttonScale = useRef(new Animated.Value(1)).current;
@@ -66,12 +66,12 @@ export default function TargetWeightScreen() {
         return 'Target weight must be more than your current weight for weight gain';
       }
     }
-    
+
     if (!isRealistic) {
       const unit = unitSystem === 'imperial' ? 'lbs' : 'kg';
       return `A ${Math.round(weightDifference)} ${unit} change is very ambitious. Consider a more gradual approach for sustainable results.`;
     }
-    
+
     const unit = unitSystem === 'imperial' ? 'lbs' : 'kg';
     return `Great! A ${Math.round(weightDifference)} ${unit} change is realistic and achievable.`;
   };
@@ -81,24 +81,23 @@ export default function TargetWeightScreen() {
     const targetWeightKg = unitSystem === 'imperial' 
       ? targetWeight / 2.20462 
       : targetWeight;
-    
+
     // Save to context
     saveTargetWeight(targetWeightKg);
     router.push('/goal-flow/calculation');
   };
 
   return (
-    <GoalFlowLayout currentStep={4} totalSteps={6}>
+    <GoalFlowLayout
+      currentStep={4}
+      totalSteps={6}
+      title="What is your desired weight?"
+      subtitle="Set a realistic target to help us create your plan">
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>What is your desired weight?</Text>
-        <Text style={styles.subtitle}>
-          Set a realistic target to help us create your plan
-        </Text>
-
         {/* Current Weight Display */}
         <View style={styles.currentWeightCard}>
           <Text style={styles.currentWeightLabel}>Current weight</Text>
@@ -138,7 +137,7 @@ export default function TargetWeightScreen() {
             <Ionicons
               name={goalType === 'lose' ? 'trending-down' : 'trending-up'}
               size={24}
-              color="#11181C"
+              color={DesignColors.black}
             />
             <Text style={styles.differenceText}>
               {goalType === 'lose' ? 'Lose' : 'Gain'} {weightDifference}{' '}
@@ -160,16 +159,16 @@ export default function TargetWeightScreen() {
               !isValidForGoal
                 ? 'warning'
                 : isRealistic
-                ? 'checkmark-circle'
-                : 'information-circle'
+                  ? 'checkmark-circle'
+                  : 'information-circle'
             }
             size={20}
             color={
               !isValidForGoal
-                ? '#DC2626'
+                ? DesignColors.error
                 : isRealistic
-                ? '#10B981'
-                : '#F59E0B'
+                  ? DesignColors.success
+                  : DesignColors.warning
             }
           />
           <Text
@@ -289,7 +288,7 @@ const styles = StyleSheet.create({
     color: DesignColors.black,
   },
   feedbackCard: {
-    backgroundColor: DesignColors.carbsOrangeBg,
+    backgroundColor: DesignColors.gray100,
     borderRadius: BorderRadius.medium,
     padding: Spacing.lg,
     flexDirection: 'row',
@@ -306,19 +305,19 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: '#92400E',
+    color: DesignColors.warningDark,
     lineHeight: 20,
   },
   feedbackTextWarning: {
-    color: DesignColors.errorRedDark,
+    color: DesignColors.error,
   },
   feedbackTextSuccess: {
-    color: '#065F46',
+    color: DesignColors.successDark,
   },
   continueButton: {
     height: 56,
     borderRadius: BorderRadius.round,
-    backgroundColor: DesignColors.black,
+    backgroundColor: DesignColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: Spacing.lg,

@@ -6,7 +6,10 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "calai",
-     "extra": { "supabaseUrl": "https://lgozuyqviyhvcydyajzw.supabase.co", "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxnb3p1eXF2aXlodmN5ZHlhanp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0NjkzMDAsImV4cCI6MjA3NjA0NTMwMH0.2tUtXClSKW5ku41GVOQeY80eA49Yv5ymJU-5Jzc0vLI" },
+    "extra": {
+      "supabaseUrl": "https://lgozuyqviyhvcydyajzw.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxnb3p1eXF2aXlodmN5ZHlhanp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA0NjkzMDAsImV4cCI6MjA3NjA0NTMwMH0.2tUtXClSKW5ku41GVOQeY80eA49Yv5ymJU-5Jzc0vLI"
+    },
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -46,7 +49,8 @@
           "photosPermission": "Allow Cal AI to access your photos to log meals",
           "cameraPermission": "Allow Cal AI to access your camera to take photos of meals"
         }
-      ]
+      ],
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
