@@ -2,8 +2,8 @@ import { Redirect, Stack } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
-import { bootstrapSession, useSessionStore } from '@/lib/session-store';
 import { DesignColors } from '@/constants/theme';
+import { bootstrapSession, useSessionStore } from '@/lib/session-store';
 
 export default function AppLayout() {
   const status = useSessionStore((state) => state.status);
@@ -32,6 +32,7 @@ export default function AppLayout() {
       <Stack.Screen name="camera" options={{ headerShown: false }} />
       <Stack.Screen name="food-result" options={{ headerShown: false }} />
       <Stack.Screen name="goal-flow" options={{ headerShown: false }} />
+      <Stack.Screen name="meal-history" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -30,11 +30,11 @@ export enum ErrorCategory {
  * Retry configuration
  */
 const RETRY_CONFIG = {
-  MAX_RETRIES: 3,
-  INITIAL_DELAY_MS: 1000, // 1 second
-  MAX_DELAY_MS: 8000, // 8 seconds
-  BACKOFF_MULTIPLIER: 2, // Exponential backoff: 1s, 2s, 4s
-  TIMEOUT_MS: 30000, // 30 seconds per request
+  MAX_RETRIES: 5,
+  INITIAL_DELAY_MS: 2000, // 2 seconds
+  MAX_DELAY_MS: 16000, // 16 seconds
+  BACKOFF_MULTIPLIER: 2, // Exponential backoff: 2s, 4s, 8s, 16s
+  TIMEOUT_MS: 120000, // 120 seconds per request (increased for Gemini rate limits)
 };
 
 /**
@@ -85,20 +85,14 @@ export function classifyError(error: unknown): ErrorCategory {
   }
 
   // Rate limiting errors
-  if (message.includes('rate limit') || message.includes('429') || message.includes('too many requests')) {
-    return ErrorCategory.RATE_LIMIT;
-  }
-
-  // Network errors
   if (
-    message.includes('network') ||
-    message.includes('fetch') ||
-    message.includes('connection') ||
-    message.includes('offline') ||
-    message.includes('enotfound') ||
-    message.includes('econnrefused')
+    message.includes('rate limit') ||
+    message.includes('429') ||
+    message.includes('too many requests') ||
+    message.includes('quota') ||
+    message.includes('resource exhausted')
   ) {
-    return ErrorCategory.NETWORK;
+    return ErrorCategory.RATE_LIMIT;
   }
 
   // Timeout errors
@@ -338,16 +332,15 @@ export async function withErrorHandling<T>(
   } = {}
 ): Promise<T> {
   try {
-    // Wrap with timeout
-    const timeoutPromise = withTimeout(
-      fn(),
-      options.timeoutMs,
-      `Operation timed out${options.stage ? ` during ${options.stage}` : ''}`
-    );
-
-    // Wrap with retry logic
+    // Wrap with retry logic, ensuring timeout is applied to each attempt
     return await withRetry(
-      () => timeoutPromise,
+      async () => {
+        return withTimeout(
+          fn(),
+          options.timeoutMs,
+          `Operation timed out${options.stage ? ` during ${options.stage}` : ''}`
+        );
+      },
       {
         maxRetries: options.maxRetries,
         onRetry: options.onRetry,

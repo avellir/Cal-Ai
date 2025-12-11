@@ -44,7 +44,7 @@ export async function getFatSecretAccessToken(): Promise<string> {
 
   // OAuth 2.0 Client Credentials flow
   const credentials = btoa(`${config.clientId}:${config.clientSecret}`);
-  
+
   try {
     const response = await fetch('https://oauth.fatsecret.com/connect/token', {
       method: 'POST',
@@ -61,7 +61,10 @@ export async function getFatSecretAccessToken(): Promise<string> {
     }
 
     const data = await response.json();
-    
+
+    // Debug: Log token retrieval success
+    console.log(`[FatSecret DEBUG] OAuth token retrieved successfully, expires in ${data.expires_in}s`);
+
     // Cache token with expiration (refresh 1 minute early to avoid edge cases)
     fatSecretToken = {
       accessToken: data.access_token,
@@ -72,7 +75,7 @@ export async function getFatSecretAccessToken(): Promise<string> {
   } catch (error) {
     // Clear cached token on error
     fatSecretToken = null;
-    
+
     if (error instanceof Error) {
       throw new Error(`Failed to authenticate with FatSecret API: ${error.message}`);
     }
@@ -86,12 +89,12 @@ export async function getFatSecretAccessToken(): Promise<string> {
  * @throws Error if credentials are not configured
  */
 function getFatSecretConfig(): FatSecretConfig {
-  const clientId = 
-    process.env.EXPO_PUBLIC_FATSECRET_CLIENT_ID || 
+  const clientId =
+    process.env.EXPO_PUBLIC_FATSECRET_CLIENT_ID ||
     process.env.FATSECRET_CLIENT_ID;
-  
-  const clientSecret = 
-    process.env.EXPO_PUBLIC_FATSECRET_CLIENT_SECRET || 
+
+  const clientSecret =
+    process.env.EXPO_PUBLIC_FATSECRET_CLIENT_SECRET ||
     process.env.FATSECRET_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
@@ -327,12 +330,12 @@ class FatSecretRequestQueue {
    */
   clear(): number {
     const clearedCount = this.queue.length;
-    
+
     // Reject all pending requests
     for (const request of this.queue) {
       request.reject(new Error('Queue cleared'));
     }
-    
+
     this.queue = [];
     return clearedCount;
   }
@@ -423,7 +426,7 @@ export async function makeFatSecretRequest(
   retryCount: number = 0
 ): Promise<unknown> {
   const MAX_RETRIES = 3;
-  
+
   return fatSecretQueue.enqueue(async () => {
     try {
       const token = await getFatSecretAccessToken();
@@ -434,19 +437,22 @@ export async function makeFatSecretRequest(
         ...params,
       });
 
+      // FatSecret API documentation specifies using POST method for server.api endpoint
       const response = await fetch(
-        `https://platform.fatsecret.com/rest/server.api?${queryParams}`,
+        `https://platform.fatsecret.com/rest/server.api`,
         {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
           },
+          body: queryParams.toString(),
         }
       );
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'Unknown error');
-        
+
         // Handle rate limiting with exponential backoff (Requirement 6.4, 8.5)
         if (response.status === 429 && retryCount < MAX_RETRIES) {
           const delayMs = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
@@ -482,15 +488,22 @@ export async function makeFatSecretRequest(
       }
 
       const data = await response.json();
+
+      // Debug: Log raw FatSecret response for search requests
+      if (method === 'foods.search') {
+        console.log(`[FatSecret DEBUG] Search for "${params.search_expression}":`);
+        console.log(`[FatSecret DEBUG] Response:`, JSON.stringify(data, null, 2).substring(0, 500));
+      }
+
       return data;
     } catch (error) {
       // Handle network errors with retry (Requirement 6.4)
       if (
         error instanceof Error &&
-        (error.message.includes('network') || 
-         error.message.includes('fetch') ||
-         error.message.includes('ENOTFOUND') ||
-         error.message.includes('ECONNREFUSED')) &&
+        (error.message.includes('network') ||
+          error.message.includes('fetch') ||
+          error.message.includes('ENOTFOUND') ||
+          error.message.includes('ECONNREFUSED')) &&
         retryCount < MAX_RETRIES
       ) {
         const delayMs = Math.pow(2, retryCount) * 1000;
@@ -587,7 +600,7 @@ class IngredientSearchCache {
    */
   get(key: string): string | null | undefined {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return undefined;
     }
@@ -630,7 +643,7 @@ class IngredientSearchCache {
    */
   has(key: string): boolean {
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       return false;
     }
@@ -782,7 +795,7 @@ function normalizeCacheKey(name: string): string {
  */
 export function normalizeIngredientName(ingredientName: string): string {
   let normalized = ingredientName.toLowerCase().trim();
-  
+
   // Remove common preparation methods (Requirement 4.1)
   const preparationMethods = [
     'grilled', 'fried', 'baked', 'roasted', 'steamed', 'boiled',
@@ -791,12 +804,12 @@ export function normalizeIngredientName(ingredientName: string): string {
     'marinated', 'seasoned', 'breaded', 'crispy', 'tender',
     'sliced', 'diced', 'chopped', 'minced', 'shredded', 'whole'
   ];
-  
+
   for (const method of preparationMethods) {
     // Remove as standalone word or with comma
     normalized = normalized.replace(new RegExp(`\\b${method}\\b,?\\s*`, 'gi'), '');
   }
-  
+
   // Handle regional variations and common substitutions (Requirement 4.3)
   const substitutions: Record<string, string> = {
     'capsicum': 'bell pepper',
@@ -813,11 +826,11 @@ export function normalizeIngredientName(ingredientName: string): string {
     'sweetcorn': 'corn',
     'tinned': 'canned',
   };
-  
+
   for (const [from, to] of Object.entries(substitutions)) {
     normalized = normalized.replace(new RegExp(`\\b${from}\\b`, 'gi'), to);
   }
-  
+
   // Remove extra descriptors that don't help search
   const descriptorsToRemove = [
     'organic', 'free-range', 'grass-fed', 'wild-caught',
@@ -826,11 +839,11 @@ export function normalizeIngredientName(ingredientName: string): string {
     'unsalted', 'salted', 'sweetened', 'unsweetened',
     'plain', 'natural', 'pure'
   ];
-  
+
   for (const descriptor of descriptorsToRemove) {
     normalized = normalized.replace(new RegExp(`\\b${descriptor}\\b,?\\s*`, 'gi'), '');
   }
-  
+
   // Standardize common food names for better FatSecret matching
   const standardizations: Record<string, string> = {
     'chicken breast fillet': 'chicken breast',
@@ -843,20 +856,20 @@ export function normalizeIngredientName(ingredientName: string): string {
     'jasmine rice': 'white rice',
     'basmati rice': 'white rice',
   };
-  
+
   for (const [from, to] of Object.entries(standardizations)) {
     if (normalized.includes(from)) {
       normalized = to;
       break;
     }
   }
-  
+
   // Clean up extra spaces and punctuation
   normalized = normalized
     .replace(/\s+/g, ' ')
     .replace(/[,;]+/g, '')
     .trim();
-  
+
   return normalized;
 }
 
@@ -884,16 +897,16 @@ export async function searchFatSecretFood(
 ): Promise<string | null> {
   // Normalize ingredient name for better FatSecret compatibility (Requirement 4.1)
   const searchName = skipNormalization ? ingredientName : normalizeIngredientName(ingredientName);
-  
+
   // Check cache first
   const cacheKey = normalizeCacheKey(searchName);
   const cachedResult = ingredientSearchCache.get(cacheKey);
-  
+
   if (cachedResult !== undefined) {
     console.log(`Cache hit for "${ingredientName}" (normalized: "${searchName}")`);
     return cachedResult;
   }
-  
+
   try {
     const response = await makeFatSecretRequest('foods.search', {
       search_expression: searchName,
@@ -902,7 +915,7 @@ export async function searchFatSecretFood(
 
     // Parse response
     const data = response as { foods?: { food?: unknown[] | unknown } };
-    
+
     if (!data.foods) {
       console.warn(`No foods found for "${ingredientName}" (searched: "${searchName}")`);
       // Cache negative result to avoid repeated failed searches
@@ -911,10 +924,10 @@ export async function searchFatSecretFood(
     }
 
     // Handle both array and single object responses
-    const foods = Array.isArray(data.foods.food) 
-      ? data.foods.food 
-      : data.foods.food 
-        ? [data.foods.food] 
+    const foods = Array.isArray(data.foods.food)
+      ? data.foods.food
+      : data.foods.food
+        ? [data.foods.food]
         : [];
 
     if (foods.length === 0) {
@@ -927,14 +940,14 @@ export async function searchFatSecretFood(
     // Return the first (most relevant) food ID
     const firstFood = foods[0] as { food_id?: string; food_name?: string };
     const foodId = firstFood.food_id || null;
-    
+
     if (foodId) {
       console.log(`Found FatSecret match for "${ingredientName}": ${firstFood.food_name || foodId}`);
     }
-    
+
     // Cache the result
     ingredientSearchCache.set(cacheKey, foodId);
-    
+
     return foodId;
   } catch (error) {
     console.error(`FatSecret search failed for "${ingredientName}" (searched: "${searchName}"):`, error);
@@ -966,7 +979,7 @@ export async function searchFatSecretFoodWithAlternatives(
   const compositeCacheKey = normalizeCacheKey(
     preparation ? `${ingredientName}|${preparation}` : ingredientName
   );
-  
+
   // Check if we've already searched with alternatives for this ingredient
   const cachedCompositeResult = ingredientSearchCache.get(compositeCacheKey);
   if (cachedCompositeResult !== undefined) {
@@ -1011,7 +1024,7 @@ export async function searchFatSecretFoodWithAlternatives(
       ingredientSearchCache.set(compositeCacheKey, foodId);
       return foodId;
     }
-    
+
     // Try last word (sometimes more specific)
     if (words.length > 2) {
       foodId = await searchFatSecretFood(words[words.length - 1], 5, true);
@@ -1074,7 +1087,7 @@ export async function getFatSecretNutrition(
 
     // Parse response
     const data = response as { food?: unknown };
-    
+
     if (!data.food) {
       console.warn(`No food data found for ID "${foodId}"`);
       return null;
@@ -1122,11 +1135,38 @@ export async function getFatSecretNutrition(
     const fat = parseFloat(serving.fat || '0');
 
     // Determine serving size and unit
-    const servingSize = serving.serving_description || 
-                       `${serving.metric_serving_amount || '100'} ${serving.metric_serving_unit || 'g'}`;
-    const servingUnit = serving.measurement_description || 
-                       serving.metric_serving_unit || 
-                       'serving';
+    // CRITICAL: Always include metric amount for proper scaling
+    // If serving_description doesn't contain gram info (e.g., "1 large"),
+    // parseServingToGrams would incorrectly extract "1" as 1g, causing massive scaling errors
+    let servingSize: string;
+    const metricAmount = serving.metric_serving_amount;
+    const metricUnit = serving.metric_serving_unit || 'g';
+
+    if (serving.serving_description) {
+      // Check if serving_description already contains gram/ml info
+      const hasMetricInDescription = /\d+\s*(?:g|gram|grams|ml|milliliter|milliliters|oz|ounce|ounces)/i.test(
+        serving.serving_description
+      );
+
+      if (hasMetricInDescription) {
+        // Description already has metric info, use as-is
+        servingSize = serving.serving_description;
+      } else if (metricAmount) {
+        // Append metric amount for proper scaling (e.g., "1 large" -> "1 large (50g)")
+        servingSize = `${serving.serving_description} (${metricAmount}${metricUnit})`;
+      } else {
+        // No metric info available, use description but this may cause scaling issues
+        console.warn(`No metric serving info for "${food.food_name}", scaling may be inaccurate`);
+        servingSize = serving.serving_description;
+      }
+    } else {
+      // No description, construct from metric values
+      servingSize = `${metricAmount || '100'} ${metricUnit}`;
+    }
+
+    const servingUnit = serving.measurement_description ||
+      serving.metric_serving_unit ||
+      'serving';
 
     return {
       foodId: food.food_id || foodId,
@@ -1168,7 +1208,7 @@ export async function getFatSecretServings(
     });
 
     const data = response as { food?: { servings?: { serving?: unknown[] | unknown } } };
-    
+
     if (!data.food?.servings?.serving) {
       return [];
     }
@@ -1228,7 +1268,7 @@ const USDA_DATABASE: Record<string, {
   'shrimp': { calories: 99, protein: 24, carbs: 0.2, fat: 0.3 },
   'egg': { calories: 155, protein: 13, carbs: 1.1, fat: 11 },
   'tofu': { calories: 76, protein: 8, carbs: 1.9, fat: 4.8 },
-  
+
   // Grains & Starches
   'white rice': { calories: 130, protein: 2.7, carbs: 28, fat: 0.3 },
   'brown rice': { calories: 112, protein: 2.6, carbs: 24, fat: 0.9 },
@@ -1239,7 +1279,7 @@ const USDA_DATABASE: Record<string, {
   'sweet potato': { calories: 86, protein: 1.6, carbs: 20, fat: 0.1 },
   'quinoa': { calories: 120, protein: 4.4, carbs: 21, fat: 1.9 },
   'oats': { calories: 389, protein: 17, carbs: 66, fat: 6.9 },
-  
+
   // Vegetables
   'broccoli': { calories: 34, protein: 2.8, carbs: 7, fat: 0.4 },
   'carrot': { calories: 41, protein: 0.9, carbs: 10, fat: 0.2 },
@@ -1255,7 +1295,7 @@ const USDA_DATABASE: Record<string, {
   'corn': { calories: 86, protein: 3.3, carbs: 19, fat: 1.4 },
   'peas': { calories: 81, protein: 5, carbs: 14, fat: 0.4 },
   'green beans': { calories: 31, protein: 1.8, carbs: 7, fat: 0.2 },
-  
+
   // Fruits
   'apple': { calories: 52, protein: 0.3, carbs: 14, fat: 0.2 },
   'banana': { calories: 89, protein: 1.1, carbs: 23, fat: 0.3 },
@@ -1263,7 +1303,7 @@ const USDA_DATABASE: Record<string, {
   'strawberry': { calories: 32, protein: 0.7, carbs: 7.7, fat: 0.3 },
   'blueberry': { calories: 57, protein: 0.7, carbs: 14, fat: 0.3 },
   'avocado': { calories: 160, protein: 2, carbs: 8.5, fat: 15 },
-  
+
   // Dairy
   'milk': { calories: 61, protein: 3.2, carbs: 4.8, fat: 3.3 },
   'cheese': { calories: 402, protein: 25, carbs: 1.3, fat: 33 },
@@ -1271,13 +1311,13 @@ const USDA_DATABASE: Record<string, {
   'mozzarella': { calories: 280, protein: 28, carbs: 3.1, fat: 17 },
   'yogurt': { calories: 59, protein: 10, carbs: 3.6, fat: 0.4 },
   'butter': { calories: 717, protein: 0.9, carbs: 0.1, fat: 81 },
-  
+
   // Oils & Fats
   'olive oil': { calories: 884, protein: 0, carbs: 0, fat: 100 },
   'vegetable oil': { calories: 884, protein: 0, carbs: 0, fat: 100 },
   'oil': { calories: 884, protein: 0, carbs: 0, fat: 100 },
   'coconut oil': { calories: 862, protein: 0, carbs: 0, fat: 100 },
-  
+
   // Condiments & Sauces
   'soy sauce': { calories: 53, protein: 5.6, carbs: 4.9, fat: 0.1 },
   'ketchup': { calories: 112, protein: 1.2, carbs: 27, fat: 0.1 },
@@ -1295,13 +1335,13 @@ const USDA_DATABASE: Record<string, {
   'pesto': { calories: 420, protein: 5, carbs: 5, fat: 42 },
   'tahini': { calories: 595, protein: 17, carbs: 21, fat: 54 },
   'cream cheese': { calories: 342, protein: 6, carbs: 5.5, fat: 34 },
-  
+
   // Nuts & Seeds
   'almond': { calories: 579, protein: 21, carbs: 22, fat: 50 },
   'peanut': { calories: 567, protein: 26, carbs: 16, fat: 49 },
   'walnut': { calories: 654, protein: 15, carbs: 14, fat: 65 },
   'cashew': { calories: 553, protein: 18, carbs: 30, fat: 44 },
-  
+
   // Legumes
   'black beans': { calories: 132, protein: 8.9, carbs: 24, fat: 0.5 },
   'kidney beans': { calories: 127, protein: 8.7, carbs: 23, fat: 0.5 },
@@ -1335,30 +1375,30 @@ export function getUSDAFallback(
 } {
   // Normalize ingredient name for lookup
   const normalizedName = ingredientName.toLowerCase().trim();
-  
+
   // Try exact match first
   let usdaData = USDA_DATABASE[normalizedName];
-  
+
   // Try partial matches if exact match fails
   if (!usdaData) {
-    const matchingKey = Object.keys(USDA_DATABASE).find(key => 
+    const matchingKey = Object.keys(USDA_DATABASE).find(key =>
       normalizedName.includes(key) || key.includes(normalizedName)
     );
-    
+
     if (matchingKey) {
       usdaData = USDA_DATABASE[matchingKey];
     }
   }
-  
+
   // Use generic fallback if no match found
   if (!usdaData) {
     console.warn(`No USDA data found for "${ingredientName}", using generic fallback`);
     usdaData = { calories: 100, protein: 5, carbs: 15, fat: 3 };
   }
-  
+
   // Scale nutrition based on quantity
   const scaleFactor = quantityGrams / 100;
-  
+
   return {
     foodId: 'usda_fallback',
     foodName: ingredientName,
@@ -1380,14 +1420,14 @@ export function getUSDAFallback(
  */
 export function hasUSDAData(ingredientName: string): boolean {
   const normalizedName = ingredientName.toLowerCase().trim();
-  
+
   // Check exact match
   if (USDA_DATABASE[normalizedName]) {
     return true;
   }
-  
+
   // Check partial matches
-  return Object.keys(USDA_DATABASE).some(key => 
+  return Object.keys(USDA_DATABASE).some(key =>
     normalizedName.includes(key) || key.includes(normalizedName)
   );
 }
@@ -1444,12 +1484,12 @@ const UNIT_TO_GRAMS: Record<string, number> = {
 export function convertToGrams(quantity: number, unit: string): number {
   const normalizedUnit = unit.toLowerCase().trim();
   const conversionFactor = UNIT_TO_GRAMS[normalizedUnit];
-  
+
   if (!conversionFactor) {
     console.warn(`Unknown unit "${unit}", assuming grams`);
     return quantity;
   }
-  
+
   return quantity * conversionFactor;
 }
 
@@ -1472,7 +1512,7 @@ export function parseServingToGrams(servingSize: string): number | null {
     /(\d+(?:\.\d+)?)\s*(tbsp|tablespoon|tablespoons)/i,
     /(\d+(?:\.\d+)?)\s*(tsp|teaspoon|teaspoons)/i,
   ];
-  
+
   for (const pattern of patterns) {
     const match = servingSize.match(pattern);
     if (match) {
@@ -1481,13 +1521,24 @@ export function parseServingToGrams(servingSize: string): number | null {
       return convertToGrams(value, unit);
     }
   }
-  
-  // Try to extract just a number (assume grams)
-  const numberMatch = servingSize.match(/(\d+(?:\.\d+)?)/);
+
+  // Try to extract a standalone number that's likely grams (not a serving count)
+  // Numbers like "1" or "2" are likely serving counts, not gram values
+  // Only use this fallback for numbers that make sense as gram values (typically >5)
+  const numberMatch = servingSize.match(/\b(\d+(?:\.\d+)?)\b/g);
   if (numberMatch) {
-    return parseFloat(numberMatch[1]);
+    // Find the largest number in the string - more likely to be a gram value
+    const numbers = numberMatch.map(n => parseFloat(n));
+    const largestNumber = Math.max(...numbers);
+
+    // Only treat as grams if it's a reasonable serving size (>5g)
+    // Small numbers like 1, 2, 3 are likely serving counts
+    if (largestNumber > 5) {
+      console.log(`parseServingToGrams: Using numeric fallback ${largestNumber}g for "${servingSize}"`);
+      return largestNumber;
+    }
   }
-  
+
   return null;
 }
 
@@ -1508,16 +1559,30 @@ export function calculateScaleFactor(
 ): number {
   // Convert ingredient quantity to grams
   const ingredientGrams = convertToGrams(ingredientQuantity, ingredientUnit);
-  
+
   // Parse FatSecret serving size to grams
   const servingGrams = parseServingToGrams(servingSize);
-  
+
   if (!servingGrams || servingGrams === 0) {
     console.warn(`Could not parse serving size: "${servingSize}", using 1:1 scale`);
     return 1;
   }
-  
-  return ingredientGrams / servingGrams;
+
+  const scaleFactor = ingredientGrams / servingGrams;
+
+  // Safety check: Extreme scale factors indicate parsing errors
+  // Normal scale factors are typically <20 (e.g., 500g / 25g = 20)
+  // Scale factors >50 likely mean serving size was incorrectly parsed
+  const MAX_REASONABLE_SCALE = 50;
+  if (scaleFactor > MAX_REASONABLE_SCALE) {
+    console.warn(
+      `Extreme scale factor detected: ${scaleFactor.toFixed(1)} (${ingredientGrams}g / ${servingGrams}g from "${servingSize}"). ` +
+      `Capping at ${MAX_REASONABLE_SCALE} to prevent wildly inaccurate nutrition.`
+    );
+    return MAX_REASONABLE_SCALE;
+  }
+
+  return scaleFactor;
 }
 
 /**
@@ -1561,11 +1626,11 @@ export async function lookupIngredientNutrition(
       ingredient.name,
       ingredient.preparation
     );
-    
+
     if (foodId) {
       // Get nutrition data from FatSecret (Requirement 4.1)
       const nutrition = await getFatSecretNutrition(foodId);
-      
+
       if (nutrition) {
         // Calculate scale factor (Requirement 4.4)
         const scaleFactor = calculateScaleFactor(
@@ -1573,7 +1638,7 @@ export async function lookupIngredientNutrition(
           ingredient.unit,
           nutrition.servingSize
         );
-        
+
         // Scale nutrition values (Requirement 4.4)
         const scaledNutrition = {
           calories: Math.round(nutrition.calories * scaleFactor),
@@ -1581,9 +1646,9 @@ export async function lookupIngredientNutrition(
           carbs: Math.round(nutrition.carbs * scaleFactor * 10) / 10,
           fat: Math.round(nutrition.fat * scaleFactor * 10) / 10,
         };
-        
+
         console.log(`✓ FatSecret data used for "${ingredient.name}"`);
-        
+
         return {
           ...nutrition,
           scaledNutrition,
@@ -1592,19 +1657,19 @@ export async function lookupIngredientNutrition(
         };
       }
     }
-    
+
     // Fallback to USDA if FatSecret fails (Requirement 4.2, 4.5)
     console.warn(`⚠ FatSecret lookup failed for "${ingredient.name}", using USDA fallback`);
     const ingredientGrams = convertToGrams(ingredient.quantity, ingredient.unit);
     const usdaData = getUSDAFallback(ingredient.name, ingredientGrams);
-    
+
     // Determine confidence penalty based on fallback type (Requirement 4.5)
     const hasUSDAMatch = hasUSDAData(ingredient.name);
     const confidencePenalty = hasUSDAMatch ? 10 : 20; // Lower penalty for known USDA foods
     const source = hasUSDAMatch ? 'usda' : 'generic';
-    
+
     console.log(`→ Using ${source} fallback with ${confidencePenalty}% confidence penalty`);
-    
+
     return {
       ...usdaData,
       scaledNutrition: {
@@ -1619,16 +1684,16 @@ export async function lookupIngredientNutrition(
   } catch (error) {
     // Last resort: USDA fallback with error handling (Requirement 4.5)
     console.error(`✗ Ingredient nutrition lookup failed for "${ingredient.name}":`, error);
-    
+
     const ingredientGrams = convertToGrams(ingredient.quantity, ingredient.unit);
     const usdaData = getUSDAFallback(ingredient.name, ingredientGrams);
-    
+
     const hasUSDAMatch = hasUSDAData(ingredient.name);
     const confidencePenalty = hasUSDAMatch ? 15 : 25; // Higher penalty due to error
     const source = hasUSDAMatch ? 'usda' : 'generic';
-    
+
     console.log(`→ Error recovery using ${source} fallback with ${confidencePenalty}% confidence penalty`);
-    
+
     return {
       ...usdaData,
       scaledNutrition: {
@@ -1723,18 +1788,18 @@ export async function batchLookupNutrition(
   // Process ingredients in batches
   for (let i = 0; i < ingredients.length; i += batchSize) {
     const batch = ingredients.slice(i, i + batchSize);
-    
+
     console.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(ingredients.length / batchSize)}`);
-    
+
     // Process batch concurrently
     const batchResults = await Promise.allSettled(
       batch.map(async (ingredient) => {
         const nutrition = await lookupIngredientNutrition(ingredient);
-        
+
         if (!nutrition) {
           throw new Error(`Failed to lookup nutrition for "${ingredient.name}"`);
         }
-        
+
         return {
           ...ingredient,
           nutrition: {
@@ -1754,11 +1819,11 @@ export async function batchLookupNutrition(
         };
       })
     );
-    
+
     // Collect successful results and log failures
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j];
-      
+
       if (result.status === 'fulfilled') {
         enrichedIngredients.push(result.value);
       } else {
@@ -1767,7 +1832,7 @@ export async function batchLookupNutrition(
           `Failed to enrich ingredient "${failedIngredient.name}":`,
           result.reason
         );
-        
+
         // Add a minimal fallback entry to avoid losing the ingredient
         const ingredientGrams = convertToGrams(
           failedIngredient.quantity,
@@ -1775,7 +1840,7 @@ export async function batchLookupNutrition(
         );
         const fallback = getUSDAFallback(failedIngredient.name, ingredientGrams);
         const hasUSDAMatch = hasUSDAData(failedIngredient.name);
-        
+
         enrichedIngredients.push({
           ...failedIngredient,
           nutrition: {
@@ -1885,16 +1950,16 @@ export async function batchLookupNutritionWithProgress(
   // Process ingredients in batches
   for (let i = 0; i < ingredients.length; i += batchSize) {
     const batch = ingredients.slice(i, i + batchSize);
-    
+
     // Process batch concurrently
     const batchResults = await Promise.allSettled(
       batch.map(async (ingredient) => {
         const nutrition = await lookupIngredientNutrition(ingredient);
-        
+
         if (!nutrition) {
           throw new Error(`Failed to lookup nutrition for "${ingredient.name}"`);
         }
-        
+
         return {
           ...ingredient,
           nutrition: {
@@ -1914,16 +1979,16 @@ export async function batchLookupNutritionWithProgress(
         };
       })
     );
-    
+
     // Collect successful results and log failures
     for (let j = 0; j < batchResults.length; j++) {
       const result = batchResults[j];
-      
+
       if (result.status === 'fulfilled') {
         enrichedIngredients.push(result.value);
       } else {
         const failedIngredient = batch[j];
-        
+
         // Add a minimal fallback entry
         const ingredientGrams = convertToGrams(
           failedIngredient.quantity,
@@ -1931,7 +1996,7 @@ export async function batchLookupNutritionWithProgress(
         );
         const fallback = getUSDAFallback(failedIngredient.name, ingredientGrams);
         const hasUSDAMatch = hasUSDAData(failedIngredient.name);
-        
+
         enrichedIngredients.push({
           ...failedIngredient,
           nutrition: {
@@ -1955,7 +2020,7 @@ export async function batchLookupNutritionWithProgress(
           isUSDAFallback: true,
         });
       }
-      
+
       processedCount++;
       onProgress?.(processedCount, totalCount);
     }

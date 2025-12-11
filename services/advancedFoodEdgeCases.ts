@@ -74,7 +74,7 @@ export function detectNoFood(segmentation: SegmentationResult): EdgeCaseDetectio
       'no visible food',
       'cannot detect food',
     ];
-    
+
     const notesLower = segmentation.notes.toLowerCase();
     for (const indicator of noFoodIndicators) {
       if (notesLower.includes(indicator)) {
@@ -124,7 +124,7 @@ export function detectSingleIngredient(segmentation: SegmentationResult): EdgeCa
   }
 
   const region = segmentation.regions[0];
-  
+
   // Check if description indicates a single whole ingredient
   const singleIngredientIndicators = [
     'whole',
@@ -369,7 +369,7 @@ export function detectBeverage(segmentation: SegmentationResult): EdgeCaseDetect
 export function adjustBeverageUnits(ingredients: Ingredient[]): Ingredient[] {
   return ingredients.map(ingredient => {
     const nameLower = ingredient.name.toLowerCase();
-    
+
     // Check if this is a beverage
     const beverageKeywords = [
       'juice',
@@ -489,7 +489,7 @@ export function limitToTopIngredients(ingredients: Ingredient[], maxCount: numbe
     if (b.confidence !== a.confidence) {
       return b.confidence - a.confidence;
     }
-    
+
     // Then by quantity (convert to grams for comparison)
     const aGrams = convertToGramsForComparison(a.quantity, a.unit);
     const bGrams = convertToGramsForComparison(b.quantity, b.unit);
@@ -591,7 +591,7 @@ export async function extractNutritionFromLabel(
 
   try {
     // Import Gemini utilities
-    const { runGeminiRequest, buildParts } = await import('@/services/foodAnalysis');
+    const { runGeminiRequest, buildParts } = await import('./geminiService');
 
     const apiKey = process.env.EXPO_PUBLIC_GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
     if (!apiKey) {
@@ -601,7 +601,7 @@ export async function extractNutritionFromLabel(
     const model =
       process.env.EXPO_PUBLIC_GOOGLE_GEMINI_MODEL ||
       process.env.GOOGLE_GEMINI_MODEL ||
-      'gemini-2.5-flash-lite';
+      'gemini-2.5-flash-lite';  // Updated to 2.5-flash-lite (released July 2025)
 
     const prompt = `Extract nutritional information from the visible nutrition label in this image.
 
@@ -672,7 +672,8 @@ Return JSON with extracted nutrition data.`;
     const response = await runGeminiRequest({
       apiKey,
       model,
-      parts: buildParts(prompt, base64Image),
+      prompt,
+      base64Image,
       temperature: 0.1, // Low temperature for accurate extraction
       maxOutputTokens: 500,
       responseSchema: schema,
@@ -727,7 +728,12 @@ Return JSON with extracted nutrition data.`;
           fat: extracted.fat,
         },
         ingredients: [enrichedIngredient],
-        regions: [region],
+        // Create a synthetic region for the label
+        regions: [{
+          description: "Nutrition Label",
+          confidence: extracted.confidence,
+          boundingBox: { x: 0, y: 0, width: 100, height: 100 }
+        }],
         confidence: extracted.confidence,
       },
       metadata: {
@@ -741,7 +747,7 @@ Return JSON with extracted nutrition data.`;
     };
   } catch (error) {
     console.error('Failed to extract nutrition from label:', error);
-    
+
     // Return error result
     return {
       success: false,

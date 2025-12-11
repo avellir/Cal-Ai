@@ -1,5 +1,5 @@
-import { supabase } from '@/lib/supabase';
 import type { AddMealInput, MealLogEntry, MealType } from '@/lib/meal-log-types';
+import { supabase } from '@/lib/supabase';
 
 type MealEntryRow = {
   id: string;
@@ -201,13 +201,33 @@ export async function logMeal(userId: string, input: AddMealInput): Promise<Meal
     throw entryInsertError;
   }
 
-  return mapMealRowToEntry({
+  const mappedEntry = mapMealRowToEntry({
     id: meal.id,
     logged_at: meal.logged_at ?? new Date().toISOString(),
     meal_type: (meal.meal_type ?? DEFAULT_MEAL_TYPE) as MealType,
     notes: meal.notes,
     meal_entries: [mealEntry],
   });
+
+  // Include the imageUri from input (stored locally, not in database)
+  return {
+    ...mappedEntry,
+    imageUri: input.imageUri ?? null,
+  };
+}
+
+export async function deleteMeal(userId: string, mealId: string): Promise<void> {
+  await ensureProfile(userId);
+
+  // Delete the logged meal (cascade will handle meal_entries)
+  const { error } = await supabase
+    .from('logged_meals')
+    .delete()
+    .eq('id', mealId);
+
+  if (error) {
+    throw error;
+  }
 }
 
 function mapMealRowToEntry(row: MealRow): MealLogEntry {

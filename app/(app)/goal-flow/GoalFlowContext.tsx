@@ -20,17 +20,17 @@ type GoalFlowState = {
   unitSystem: UnitSystem;
   heightCm: number | null;
   weightKg: number | null;
-  
+
   // Step 2: Birthdate
   birthdate: Date | null;
   age: number | null;
-  
+
   // Step 3: Goal
   goalType: GoalType | null;
-  
+
   // Step 4: Target Weight
   targetWeightKg: number | null;
-  
+
   // Step 5: Calculated values
   dailyCalories: number | null;
   dailyProtein: number | null;
@@ -218,10 +218,12 @@ export function GoalFlowProvider({ children }: { children: ReactNode }) {
  */
 export function useGoalFlow(): GoalFlowContextType {
   const context = useContext(GoalFlowContext);
-  
+
   if (context === undefined) {
     throw new Error('useGoalFlow must be used within a GoalFlowProvider');
   }
-  
+
   return context;
 }
+
+export default GoalFlowProvider;

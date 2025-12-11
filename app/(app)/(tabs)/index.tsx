@@ -4,14 +4,14 @@ import { router } from 'expo-router';
 import { Droplet, Fish, Leaf, type LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
 import {
-  ActivityIndicator,
-  Dimensions,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -78,7 +78,9 @@ export default function HomeScreen() {
   const userId = session?.user?.id ?? null;
   const gradientHeight = insets.top + Math.round(Dimensions.get('window').height * 0.40);
   const bottomGradientHeight = Math.round(Dimensions.get('window').height * 0.15);
-  const recentMeal = meals[0] ?? null;
+  
+  // Get the 2 most recent meals
+  const recentMeals = meals.slice(0, 2);
 
   // User goals state
   const fetchGoals = useUserGoalsStore((state) => state.fetchGoals);
@@ -90,7 +92,7 @@ export default function HomeScreen() {
   const dailyTargets = getDailyTargets();
 
   // Calculate remaining calories and macros
-  const caloriesRemaining = dailyTargets 
+  const caloriesRemaining = dailyTargets
     ? Math.max(0, dailyTargets.calories - dailyTotals.calories)
     : 0;
   const proteinRemaining = dailyTargets
@@ -134,18 +136,6 @@ export default function HomeScreen() {
   }, [userId, fetchMeals, fetchGoals]);
 
   const isInitialLoading = status === 'loading' && meals.length === 0;
-
-  const mealDisplay = recentMeal
-    ? {
-        title: recentMeal.name,
-        timestamp: formatMealTimestamp(recentMeal.timestamp),
-        calories: Math.round(recentMeal.calories),
-        protein: Math.round(recentMeal.macros.protein),
-        carbs: Math.round(recentMeal.macros.carbs),
-        fat: Math.round(recentMeal.macros.fat),
-        imageUri: recentMeal.imageUri ?? null,
-      }
-    : null;
 
   return (
     <SafeAreaView
@@ -197,7 +187,7 @@ export default function HomeScreen() {
               <Text style={styles.brandText}>Cal AI</Text>
             </View>
             <View style={styles.streakPill}>
-              <Feather name="flame" size={16} color={DesignColors.warning} />
+              <Feather name="zap" size={16} color={DesignColors.warning} />
               <Text style={styles.streakValue}>0</Text>
             </View>
           </View>
@@ -232,14 +222,14 @@ export default function HomeScreen() {
             <View style={styles.calorieCopy}>
               {hasGoals() ? (
                 <>
-              <Text style={styles.overline}>Today</Text>
-              <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
-              <Text style={styles.calorieLabel}>Calories left</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.overline}>Goals</Text>
-              <Text style={styles.calorieValue}>Set Goals</Text>
+                  <Text style={styles.overline}>Today</Text>
+                  <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
+                  <Text style={styles.calorieLabel}>Calories left</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.overline}>Goals</Text>
+                  <Text style={styles.calorieValue}>Set Goals</Text>
                   <Text style={styles.calorieLabel}>Tap to configure your targets</Text>
                 </>
               )}
@@ -297,7 +287,14 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.recentSection}>
-            <Text style={styles.sectionTitle}>Recently logged</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recently logged</Text>
+              {meals.length > 0 && (
+                <Pressable onPress={() => router.push('/(app)/meal-history')}>
+                  <Text style={styles.seeAllText}>See all</Text>
+                </Pressable>
+              )}
+            </View>
             {isInitialLoading ? (
               <View style={styles.recentEmptyCard}>
                 <ActivityIndicator size="small" color={DesignColors.black} />
@@ -308,32 +305,36 @@ export default function HomeScreen() {
                 <Text style={styles.recentHeadline}>Unable to load meals</Text>
                 <Text style={styles.recentNote}>{mealError}</Text>
               </View>
-            ) : mealDisplay ? (
-              <View style={styles.recentCard}>
-                <View style={styles.recentRow}>
-                  {mealDisplay.imageUri ? (
-                    <Image source={{ uri: mealDisplay.imageUri }} style={styles.recentImage} />
-                  ) : (
-                    <View style={styles.recentImagePlaceholder}>
-                      <Text style={styles.recentImageEmoji}>🍽️</Text>
-                    </View>
-                  )}
-                  <View style={styles.recentContent}>
-                    <View style={styles.recentHeader}>
-                      <Text style={styles.recentHeadline} numberOfLines={1}>{mealDisplay.title}</Text>
-                      <Pressable style={styles.recentMoreBtn}>
-                        <Feather name="more-horizontal" size={20} color={DesignColors.gray400} />
-                      </Pressable>
-                    </View>
-                    <Text style={styles.recentTimestamp}>{mealDisplay.timestamp}</Text>
-                    <View style={styles.recentMacroRow}>
-                      <Text style={styles.recentMacroItem}>🔥 {mealDisplay.calories} Cal</Text>
-                      <Text style={styles.recentMacroItem}>🍗 {mealDisplay.protein}g</Text>
-                      <Text style={styles.recentMacroItem}>🌾 {mealDisplay.carbs}g</Text>
-                      <Text style={styles.recentMacroItem}>🥑 {mealDisplay.fat}g</Text>
+            ) : recentMeals.length > 0 ? (
+              <View style={styles.recentMealsList}>
+                {recentMeals.map((meal) => (
+                  <View key={meal.id} style={styles.recentCard}>
+                    <View style={styles.recentRow}>
+                      {meal.imageUri ? (
+                        <Image source={{ uri: meal.imageUri }} style={styles.recentImage} />
+                      ) : (
+                        <View style={styles.recentImagePlaceholder}>
+                          <Text style={styles.recentImageEmoji}>🍽️</Text>
+                        </View>
+                      )}
+                      <View style={styles.recentContent}>
+                        <View style={styles.recentHeader}>
+                          <Text style={styles.recentHeadline} numberOfLines={1}>{meal.name}</Text>
+                          <Pressable style={styles.recentMoreBtn}>
+                            <Feather name="more-horizontal" size={20} color={DesignColors.gray400} />
+                          </Pressable>
+                        </View>
+                        <Text style={styles.recentTimestamp}>{formatMealTimestamp(meal.timestamp)}</Text>
+                        <View style={styles.recentMacroRow}>
+                          <Text style={styles.recentMacroItem}>🔥 {Math.round(meal.calories)} Cal</Text>
+                          <Text style={styles.recentMacroItem}>🍗 {Math.round(meal.macros.protein)}g</Text>
+                          <Text style={styles.recentMacroItem}>🌾 {Math.round(meal.macros.carbs)}g</Text>
+                          <Text style={styles.recentMacroItem}>🥑 {Math.round(meal.macros.fat)}g</Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
-                </View>
+                ))}
               </View>
             ) : (
               <View style={styles.recentEmptyCard}>
@@ -607,10 +608,23 @@ const styles = StyleSheet.create({
   recentSection: {
     gap: 12,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   sectionTitle: {
     fontSize: 18,
     color: DesignColors.black,
     fontWeight: '600',
+  },
+  seeAllText: {
+    fontSize: 14,
+    color: DesignColors.primary,
+    fontWeight: '600',
+  },
+  recentMealsList: {
+    gap: 12,
   },
   recentCard: {
     backgroundColor: '#FFFFFF',
