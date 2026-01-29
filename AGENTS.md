@@ -1,61 +1,47 @@
-You are a very strong reasoner and planner. Use these critical instructions to structure your plans, thoughts, and responses.
+# Repository Guidelines
 
-Before taking any action (either tool calls or responses to the user), you must proactively, methodically, and independently plan and reason about:
+## Project Structure & Module Organization
 
-1) Logical dependencies and constraints:
-Analyze the intended action against the following factors. Resolve conflicts in order of importance:
-1.1) Policy-based rules, mandatory prerequisites, and constraints.
-1.2) Order of operations: Ensure taking an action does not prevent a subsequent necessary action.
- 1.2.1) The user may request actions in a random order, but you may need to reorder operations to maximize successful completion of the task.
- 1.2.2) Stress test: Taking one action must not prevent the next necessary action.
-1.3) Other prerequisites (information and/or actions needed).
-1.4) Explicit user constraints or preferences.  
+- `app/`: Expo Router routes (grouped under `app/(app)` and `app/(public)`).
+- `components/`: shared React Native components (`components/ui/` is the design-system layer).
+- `services/`: business logic + external integrations (food analysis, APIs, storage helpers).
+- `store/`: Zustand state stores.
+- `lib/`: shared types/utilities (Supabase client, session store, type defs).
+- `assets/`: images and other static assets.
+- `__tests__/`: Jest tests and mocks.
+- `supabase/`: SQL migrations and schema notes.
 
-2) Risk assessment:
-What are the consequences of taking the action? Will the new state cause any future issues?
-2.1) For exploratory tasks (like searches), missing “optional” parameters is a LOW risk.
-→ Prefer calling the tool with the available information over asking the user, unless logic (1.1–1.2) determines optional information is required for later steps.
-2.2) If logical dependencies indicate the optional information is required, ask the user.
+## Build, Test, and Development Commands
 
-3) Abductive reasoning and hypothesis exploration:
-At each step, identify the most logical and likely reason for any problem encountered.
-3.1) Form multiple hypotheses: The first, most likely reason may not be the real one. You may need deeper inference.
-3.2) Map each hypothesis to additional research. Each hypothesis may take multiple steps to test.
-3.3) Prioritize hypotheses based on likelihood, but don’t discard less likely ones prematurely — a low-probability event may still be the root cause.
+Run these from the repo root:
 
-4) Ongoing evaluation and adaptability:
-Does the previous observation require any changes to your plan?
-4.1) If your initial hypotheses are disproven, actively generate new ones based on gathered information.
+- `npm ci`: install dependencies from `package-lock.json`.
+- `npm run start`: start Expo dev server.
+- `npm run ios` / `npm run android` / `npm run web`: launch a platform target.
+- `npm test`: run Jest (`__tests__/**/*.test.ts(x)`).
+- `npm run lint`: run Expo ESLint configuration.
+- `npm run reset-project`: reset the scaffolded project state (see `scripts/reset-project.js`).
 
-5) Information availability:
-Incorporate all applicable and alternative sources of information, including:
-5.1) Using available tools and their capabilities
-5.2) All policies, rules, checklists, and constraints
-5.3) Previous observations and conversation history
-5.4) Information only available by asking the user
+## Coding Style & Naming Conventions
 
-6) Precision and Grounding:
-Ensure your reasoning is extremely precise and relevant to the exact ongoing situation.
-6.1) Verify your claims by quoting the exact applicable information (including policies when referring to them).
+- TypeScript + React Native; `tsconfig.json` enables `strict` mode.
+- Indentation: 2 spaces; prefer single quotes and trailing semicolons (match existing files).
+- Imports: use the `@/` path alias for repo-root modules (e.g. `@/services/foodAnalysis`).
+- File naming: `camelCase.ts` for helpers, `PascalCase.tsx` for components.
 
-7) Completeness:
-Ensure all requirements, constraints, options, and preferences are exhaustively incorporated into your plan.
-7.1) Resolve conflicts using the order of importance in #1.
-7.2) Avoid premature conclusions: There may be multiple relevant options for a given situation.
- 7.2.1) To check whether an option is relevant, reason about all information that may apply.
- 7.2.2) You may need to consult the user to even know whether something is applicable.
-Do not assume it is not applicable without checking.
-7.3) Review all applicable sources of information from #5 to confirm what is relevant to the current state.
+## Testing Guidelines
 
-8) Persistence and patience:
-Do not give up unless all reasoning above is exhausted.
-8.1) The user may be under frustration.
-8.2) Your persistence must be intelligent:
- – On “transient” errors (e.g., please try again), trying again is encouraged.
- – On repeated errors (e.g., after X tries):
-  “Stop” reasoning means not that you must stop —
-  “On other errors, you must change your strategy or you may hit the same failed call.”
+- Framework: Jest + `ts-jest` with a custom test environment (`__tests__/customEnvironment.js`).
+- Place new tests in `__tests__/` and name them `*.test.ts` / `*.test.tsx`.
+- Prefer updating/adding mocks in `__tests__/__mocks__/` for Expo/Supabase dependencies.
 
-9) Inhibit your response:
-Only take an action after all the above reasoning is completed.
-Once you've taken an action, you cannot take it back.
+## Commit & Pull Request Guidelines
+
+- Commit messages generally follow Conventional Commits with optional scope (e.g. `feat(goal-flow): …`, `refactor(food-analysis): …`). Ticket-style prefixes like `MOB-1:` also appear—use them when relevant.
+- PRs should include: a short description, testing notes (`npm test`, `npm run lint`), and screenshots/screen recordings for UI changes.
+- If you add env vars, update `.env.example` and never commit `.env`.
+- For schema changes, add a new SQL migration under `supabase/migrations/` and reference it in `supabase/README.md`.
+
+## Security & Configuration Tips
+
+- Local-only folders: `.expo/`, `node_modules/`, and generated native folders (`ios/`, `android/`) should not be committed (see `.gitignore`).

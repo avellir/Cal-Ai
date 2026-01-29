@@ -89,8 +89,8 @@ export default function TargetWeightScreen() {
 
   return (
     <GoalFlowLayout
-      currentStep={4}
-      totalSteps={6}
+      currentStep={5}
+      totalSteps={7}
       title="What is your desired weight?"
       subtitle="Set a realistic target to help us create your plan">
       <ScrollView

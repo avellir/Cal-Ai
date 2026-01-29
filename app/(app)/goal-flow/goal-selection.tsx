@@ -40,8 +40,8 @@ export default function GoalSelectionScreen() {
 
   return (
     <GoalFlowLayout
-      currentStep={3}
-      totalSteps={6}
+      currentStep={4}
+      totalSteps={7}
       title="What is your goal?"
       subtitle="Choose your fitness objective to get personalized recommendations">
       <ScrollView

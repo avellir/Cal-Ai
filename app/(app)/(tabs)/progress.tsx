@@ -6,6 +6,7 @@ import { Chip } from '@/components/ui/Chip';
 import { Card } from '@/components/ui/Card';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { CalorieTrendChart } from '@/components/CalorieTrendChart';
+import { AppBackground } from '@/components/ui/AppBackground';
 
 const SUMMARY = [
   { label: 'Current streak', value: '6 days', description: 'You logged meals every day this week.' },
@@ -30,6 +31,7 @@ export default function ProgressScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <AppBackground />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <Text style={styles.title}>Progress overview</Text>
@@ -116,7 +118,7 @@ export default function ProgressScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: DesignColors.background,
+    backgroundColor: 'transparent',
   },
   content: {
     flexGrow: 1,

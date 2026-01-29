@@ -12,7 +12,8 @@ export type MealLogEntry = {
   calories: number;
   macros: MealMacroSummary;
   note?: string | null;
-  imageUri?: string | null;
+  imageUri?: string | null;      // Local cached URI
+  imageUrl?: string | null;      // Remote storage URL
   timestamp: number;
   mealType: MealType;
 };

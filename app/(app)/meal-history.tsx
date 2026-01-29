@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DesignColors, Typography } from '@/constants/theme';
-import { useMealLogStore } from '@/lib/meal-log-store';
+import { resolveImageUri, useMealLogStore } from '@/lib/meal-log-store';
 import type { MealLogEntry, MealType } from '@/lib/meal-log-types';
 import { useSessionStore } from '@/lib/session-store';
 
@@ -63,12 +63,15 @@ type MealCardProps = {
 
 function MealCard({ meal, onDelete, isDeleting }: MealCardProps) {
   const [showActions, setShowActions] = useState(false);
+  
+  // Resolve image URI with cache-first logic (Requirements 2.2, 2.3)
+  const resolvedImageUri = resolveImageUri(meal.imageUri, meal.imageUrl);
 
   return (
     <View style={styles.mealCard}>
       <View style={styles.mealRow}>
-        {meal.imageUri ? (
-          <Image source={{ uri: meal.imageUri }} style={styles.mealImage} />
+        {resolvedImageUri ? (
+          <Image source={{ uri: resolvedImageUri }} style={styles.mealImage} />
         ) : (
           <View style={styles.mealImagePlaceholder}>
             <Text style={styles.mealImageEmoji}>🍽️</Text>
@@ -218,28 +221,30 @@ export default function MealHistoryScreen() {
       </View>
 
       {/* Filters */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filtersContainer}>
-        {FILTER_OPTIONS.map((option) => (
-          <Pressable
-            key={option.value}
-            style={[
-              styles.filterChip,
-              activeFilter === option.value && styles.filterChipActive,
-            ]}
-            onPress={() => setActiveFilter(option.value)}>
-            <Text
+      <View style={styles.filtersWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtersContainer}>
+          {FILTER_OPTIONS.map((option) => (
+            <Pressable
+              key={option.value}
               style={[
-                styles.filterChipText,
-                activeFilter === option.value && styles.filterChipTextActive,
-              ]}>
-              {option.label}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
+                styles.filterChip,
+                activeFilter === option.value && styles.filterChipActive,
+              ]}
+              onPress={() => setActiveFilter(option.value)}>
+              <Text
+                style={[
+                  styles.filterChipText,
+                  activeFilter === option.value && styles.filterChipTextActive,
+                ]}>
+                {option.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
 
       {/* Meals List */}
       <ScrollView
@@ -321,9 +326,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: DesignColors.black,
   },
+  filtersWrapper: {
+    paddingVertical: 16,
+  },
   filtersContainer: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    alignItems: 'center',
     gap: 8,
   },
   filterChip: {

@@ -1,11 +1,9 @@
 import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { Droplet, Fish, Leaf, type LucideIcon } from 'lucide-react-native';
 import { useEffect } from 'react';
 import {
     ActivityIndicator,
-    Dimensions,
     Image,
     Pressable,
     ScrollView,
@@ -13,13 +11,14 @@ import {
     Text,
     View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { MacroStatCard } from '@/components/MacroStatCard';
+import { AppBackground } from '@/components/ui/AppBackground';
 import { Card } from '@/components/ui/Card';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
-import { useMealLogStore } from '@/lib/meal-log-store';
+import { resolveImageUri, useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
 import { aggregateDailyNutrition } from '@/services/nutritionAggregation';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
@@ -69,15 +68,12 @@ const MACRO_CONFIGS: MacroCardConfig[] = [
 ];
 
 export default function HomeScreen() {
-  const insets = useSafeAreaInsets();
   const session = useSessionStore((state) => state.session);
   const meals = useMealLogStore((state) => state.meals);
   const status = useMealLogStore((state) => state.status);
   const mealError = useMealLogStore((state) => state.error);
   const fetchMeals = useMealLogStore((state) => state.fetchMeals);
   const userId = session?.user?.id ?? null;
-  const gradientHeight = insets.top + Math.round(Dimensions.get('window').height * 0.40);
-  const bottomGradientHeight = Math.round(Dimensions.get('window').height * 0.15);
   
   // Get the 2 most recent meals
   const recentMeals = meals.slice(0, 2);
@@ -142,42 +138,7 @@ export default function HomeScreen() {
       style={styles.safeArea}
       edges={['top', 'left', 'right']}>
       <View style={styles.root}>
-        <LinearGradient
-          colors={[
-            'rgba(248, 250, 252, 0.8)',
-            'rgba(248, 250, 252, 0.6)',
-            'rgba(249, 250, 251, 0.4)',
-            'rgba(252, 252, 253, 0.2)',
-            'rgba(255, 255, 255, 0)',
-          ]}
-          locations={[0, 0.25, 0.5, 0.75, 1]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[
-            styles.gradient,
-            {
-              height: gradientHeight,
-              top: -insets.top,
-            },
-          ]}
-          pointerEvents="none"
-        />
-        <LinearGradient
-          colors={[
-            'rgba(255, 255, 255, 0)',
-            'rgba(250, 250, 250, 0.3)',
-            'rgba(248, 248, 248, 0.6)',
-            DesignColors.white,
-          ]}
-          locations={[0, 0.3, 0.7, 1]}
-          style={[
-            styles.bottomGradient,
-            {
-              height: bottomGradientHeight,
-            },
-          ]}
-          pointerEvents="none"
-        />
+        <AppBackground />
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}>
@@ -307,11 +268,14 @@ export default function HomeScreen() {
               </View>
             ) : recentMeals.length > 0 ? (
               <View style={styles.recentMealsList}>
-                {recentMeals.map((meal) => (
+                {recentMeals.map((meal) => {
+                  // Resolve image URI with cache-first logic (Requirements 2.2, 2.3)
+                  const resolvedImageUri = resolveImageUri(meal.imageUri, meal.imageUrl);
+                  return (
                   <View key={meal.id} style={styles.recentCard}>
                     <View style={styles.recentRow}>
-                      {meal.imageUri ? (
-                        <Image source={{ uri: meal.imageUri }} style={styles.recentImage} />
+                      {resolvedImageUri ? (
+                        <Image source={{ uri: resolvedImageUri }} style={styles.recentImage} />
                       ) : (
                         <View style={styles.recentImagePlaceholder}>
                           <Text style={styles.recentImageEmoji}>🍽️</Text>
@@ -334,7 +298,8 @@ export default function HomeScreen() {
                       </View>
                     </View>
                   </View>
-                ))}
+                  );
+                })}
               </View>
             ) : (
               <View style={styles.recentEmptyCard}>
@@ -435,11 +400,11 @@ function IngredientList({ description }: { description?: string | null }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: DesignColors.background,
+    backgroundColor: 'transparent',
   },
   root: {
     flex: 1,
-    backgroundColor: DesignColors.background,
+    backgroundColor: 'transparent',
   },
   gradient: {
     position: 'absolute',

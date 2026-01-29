@@ -25,6 +25,10 @@ export type GoalFlowData = {
   // Step 2: Birthdate
   birthdate: Date;
   age: number;
+
+  // Step 3: Personal details for calculations
+  sex: Sex;
+  activityLevel: ActivityLevel;
   
   // Step 3: Goal
   goalType: GoalType;
@@ -50,6 +54,8 @@ export type UserGoal = {
   weightKg: number;
   birthdate: string; // ISO date string from database
   age: number;
+  sex: Sex;
+  activityLevel: ActivityLevel;
   goalType: GoalType;
   targetWeightKg: number;
   dailyCalories: number;
@@ -95,6 +101,8 @@ export type UserGoalRow = {
   height_cm: number;
   weight_kg: number;
   birthdate: string;
+  sex: Sex;
+  activity_level: ActivityLevel;
   goal_type: GoalType;
   target_weight_kg: number;
   daily_calories: number;
@@ -114,6 +122,8 @@ export type UserGoalInput = {
   height_cm: number;
   weight_kg: number;
   birthdate: string;
+  sex: Sex;
+  activity_level: ActivityLevel;
   goal_type: GoalType;
   target_weight_kg: number;
   daily_calories: number;

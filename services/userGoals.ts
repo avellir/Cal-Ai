@@ -31,6 +31,8 @@ function rowToUserGoal(row: UserGoalRow): UserGoal {
     weightKg: row.weight_kg,
     birthdate: row.birthdate,
     age: calculateAge(row.birthdate),
+    sex: row.sex ?? 'male',
+    activityLevel: row.activity_level ?? 'sedentary',
     goalType: row.goal_type,
     targetWeightKg: row.target_weight_kg,
     dailyCalories: row.daily_calories,
@@ -106,6 +108,8 @@ export async function saveUserGoals(
       height_cm: goalData.heightCm,
       weight_kg: goalData.weightKg,
       birthdate: goalData.birthdate.toISOString().split('T')[0], // YYYY-MM-DD format
+      sex: goalData.sex,
+      activity_level: goalData.activityLevel,
       goal_type: goalData.goalType,
       target_weight_kg: goalData.targetWeightKg,
       daily_calories: goalData.dailyCalories,
@@ -124,6 +128,13 @@ export async function saveUserGoals(
       .single();
 
     if (error) {
+      if (error.code === 'PGRST204') {
+        return {
+          data: null,
+          error:
+            'Your Supabase schema is missing new columns (sex/activity_level). Apply migration 20260129000000_add_sex_activity_and_weight_entries.sql, then refresh the API schema cache and try again.',
+        };
+      }
       console.error('Error saving user goals:', error);
       return { 
         data: null, 
@@ -140,6 +151,66 @@ export async function saveUserGoals(
     return { 
       data: null, 
       error: 'An unexpected error occurred. Please try again.' 
+    };
+  }
+}
+
+export type PatchUserGoalsInput = Partial<
+  Pick<
+    UserGoalInput,
+    | 'height_cm'
+    | 'weight_kg'
+    | 'birthdate'
+    | 'sex'
+    | 'activity_level'
+    | 'daily_calories'
+    | 'daily_protein_g'
+    | 'daily_carbs_g'
+    | 'daily_fat_g'
+  >
+>;
+
+/**
+ * Patch user goals fields in Supabase
+ *
+ * Used for updating personal info fields (sex, activity, metrics) without re-running the full flow.
+ */
+export async function patchUserGoals(
+  userId: string,
+  updates: PatchUserGoalsInput
+): Promise<ServiceResponse<UserGoal>> {
+  try {
+    const { data, error } = await supabase
+      .from('user_goals')
+      .update(updates)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST204') {
+        return {
+          data: null,
+          error:
+            'Your Supabase schema is missing new columns (sex/activity_level). Apply migration 20260129000000_add_sex_activity_and_weight_entries.sql, then refresh the API schema cache and try again.',
+        };
+      }
+      console.error('Error patching user goals:', error);
+      return {
+        data: null,
+        error: 'Unable to update. Please try again.',
+      };
+    }
+
+    return {
+      data: rowToUserGoal(data as UserGoalRow),
+      error: null,
+    };
+  } catch (err) {
+    console.error('Unexpected error patching user goals:', err);
+    return {
+      data: null,
+      error: 'An unexpected error occurred. Please try again.',
     };
   }
 }

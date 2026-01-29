@@ -1,127 +1,247 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DesignColors } from '@/constants/theme';
-import { ProfileInputModal } from '@/components/profile-input-modal';
+import { SexActivityModal } from '@/components/SexActivityModal';
+import { WeightEntryModal } from '@/components/WeightEntryModal';
 import { ThemedText } from '@/components/themed-text';
+import { AppBackground } from '@/components/ui/AppBackground';
 import { Card } from '@/components/ui/Card';
 import { ListRow } from '@/components/ui/ListRow';
 import { Chip } from '@/components/ui/Chip';
 import { Badge } from '@/components/ui/Badge';
 import { useSessionStore } from '@/lib/session-store';
+import { calculateAge, type ActivityLevel, type Sex } from '@/lib/user-goals-types';
+import { calculateNutritionPlan } from '@/services/goalCalculation';
+import { patchUserGoals } from '@/services/userGoals';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
-import { useUserProfileStore } from '@/store/userProfileStore';
+import { useUserWeightLogStore } from '@/store/userWeightLogStore';
 
 export default function SettingsScreen() {
-  const [modalVisible, setModalVisible] = useState(false);
-  const { profile } = useUserProfileStore();
+  const [sexActivityModalVisible, setSexActivityModalVisible] = useState(false);
+  const [weightModalVisible, setWeightModalVisible] = useState(false);
   const { session } = useSessionStore();
-  const { fetchGoals, hasGoals, getDailyTargets } = useUserGoalsStore();
+  const { goals, fetchGoals, isLoading: goalsLoading, error: goalsError, getDailyTargets } = useUserGoalsStore();
+  const { latest, fetchLatest, addToday, isLoading: weightLoading } = useUserWeightLogStore();
 
-  // Fetch goals on mount
   useEffect(() => {
     if (session?.user?.id) {
       fetchGoals(session.user.id);
+      fetchLatest(session.user.id);
     }
-  }, [session?.user?.id, fetchGoals]);
+  }, [session?.user?.id, fetchGoals, fetchLatest]);
 
   const handleAdjustGoals = () => {
     router.push('/(app)/goal-flow' as any);
   };
 
   const dailyTargets = getDailyTargets();
+  const hasGoals = !!goals;
+
+  const getSexLabel = (sex: Sex | null) => {
+    if (!sex) return 'Not set';
+    return sex === 'male' ? 'Male' : 'Female';
+  };
+
+  const getActivityLabel = (level: ActivityLevel | null) => {
+    if (!level) return 'Not set';
+    switch (level) {
+      case 'sedentary':
+        return 'Sedentary';
+      case 'light':
+        return 'Lightly active';
+      case 'moderate':
+        return 'Moderately active';
+      case 'active':
+        return 'Active';
+      case 'veryActive':
+        return 'Very active';
+      default:
+        return 'Not set';
+    }
+  };
+
+  const birthdateLabel = goals?.birthdate
+    ? new Date(goals.birthdate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'Not set';
+  const ageLabel = goals?.birthdate ? `${calculateAge(goals.birthdate)} yrs` : 'Not set';
+
+  const displayedWeightKg = latest?.weightKg ?? goals?.weightKg ?? null;
+  const weightLabel = displayedWeightKg != null ? `${Math.round(displayedWeightKg * 10) / 10} kg` : 'Not set';
+  const weightSubLabel = latest?.recordedAt
+    ? new Date(latest.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    : 'Tap to log today’s weight';
+
+  const handleSaveSexActivity = async (next: { sex: Sex; activityLevel: ActivityLevel }) => {
+    if (!session?.user?.id) return;
+
+    if (!goals) {
+      Alert.alert('Set up required', 'Please complete goal setup first.');
+      handleAdjustGoals();
+      return;
+    }
+
+    const weightKgForCalc = displayedWeightKg ?? goals.weightKg;
+    const heightCmForCalc = goals.heightCm;
+
+    if (weightKgForCalc == null || heightCmForCalc == null) {
+      Alert.alert('Missing data', 'Please complete goal setup first.');
+      handleAdjustGoals();
+      return;
+    }
+
+    const plan = calculateNutritionPlan(
+      weightKgForCalc,
+      heightCmForCalc,
+      calculateAge(goals.birthdate),
+      goals.goalType,
+      goals.targetWeightKg,
+      next.sex,
+      next.activityLevel
+    );
+
+    const { data, error } = await patchUserGoals(session.user.id, {
+      sex: next.sex,
+      activity_level: next.activityLevel,
+      weight_kg: weightKgForCalc,
+      daily_calories: plan.dailyCalories,
+      daily_protein_g: plan.dailyProtein,
+      daily_carbs_g: plan.dailyCarbs,
+      daily_fat_g: plan.dailyFat,
+    });
+
+    if (error || !data) {
+      Alert.alert('Update failed', error ?? 'Unable to update your details.');
+      return;
+    }
+
+    useUserGoalsStore.setState({ goals: data, error: null });
+  };
+
+  const handleSaveWeightToday = async (weightKg: number) => {
+    if (!session?.user?.id) return;
+
+    const success = await addToday(session.user.id, weightKg);
+    if (!success) {
+      const message = useUserWeightLogStore.getState().error ?? 'Unable to save your weight.';
+      Alert.alert('Save failed', message);
+      return;
+    }
+
+    if (!goals) return;
+
+    const sex = goals.sex ?? 'male';
+    const activityLevel = goals.activityLevel ?? 'sedentary';
+    const plan = calculateNutritionPlan(
+      weightKg,
+      goals.heightCm,
+      calculateAge(goals.birthdate),
+      goals.goalType,
+      goals.targetWeightKg,
+      sex,
+      activityLevel
+    );
+
+    const { data, error } = await patchUserGoals(session.user.id, {
+      weight_kg: weightKg,
+      daily_calories: plan.dailyCalories,
+      daily_protein_g: plan.dailyProtein,
+      daily_carbs_g: plan.dailyCarbs,
+      daily_fat_g: plan.dailyFat,
+    });
+
+    if (error || !data) {
+      Alert.alert('Update failed', error ?? 'Unable to update your targets.');
+      return;
+    }
+
+    useUserGoalsStore.setState({ goals: data, error: null });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <AppBackground />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.header}>
-          <ThemedText type="title">Profile Settings</ThemedText>
-          <ThemedText style={styles.subtitle}>
-            Manage your personal information and preferences.
-          </ThemedText>
-        </View>
+        <Card style={styles.profileHeader} elevation="sm">
+          <View style={styles.profileHeaderRow}>
+            <View style={styles.avatar}>
+              <Ionicons name="person" size={22} color={DesignColors.gray600} />
+            </View>
+            <View style={styles.profileHeaderCopy}>
+              <ThemedText style={styles.profileHeaderTitle}>Profile</ThemedText>
+              <ThemedText style={styles.profileHeaderSubtitle}>
+                {session?.user?.email ?? 'Not signed in'}
+              </ThemedText>
+            </View>
+            {goalsLoading || weightLoading ? <Badge label="Syncing" tone="neutral" /> : null}
+          </View>
+          {goalsError ? (
+            <View style={styles.banner}>
+              <Ionicons name="alert-circle" size={18} color={DesignColors.warningDark} />
+              <ThemedText style={styles.bannerText}>{goalsError}</ThemedText>
+            </View>
+          ) : null}
+        </Card>
 
         {/* Personal Info */}
         <Card style={styles.sectionCard} elevation="sm">
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Personal Information</ThemedText>
-            <Badge label="Required" tone="info" />
+            {!hasGoals ? <Badge label="Not set" tone="warning" /> : <Badge label="Required" tone="info" />}
           </View>
-          {profile.age || profile.height || profile.weight ? (
-            <View style={styles.profileGrid}>
-              <View style={styles.profileCard}>
-                <View style={styles.profileIconContainer}>
-                  <Ionicons name="calendar" size={24} color={DesignColors.gray500} />
-                </View>
-                <ThemedText style={styles.profileLabel}>Age</ThemedText>
-                <ThemedText style={styles.profileValue}>
-                  {profile.age ? `${profile.age} years` : 'Not set'}
-                </ThemedText>
-              </View>
-
-              <View style={styles.profileCard}>
-                <View style={styles.profileIconContainer}>
-                  <Ionicons name="resize" size={24} color={DesignColors.gray500} />
-                </View>
-                <ThemedText style={styles.profileLabel}>Height</ThemedText>
-                <ThemedText style={styles.profileValue}>
-                  {profile.height ? `${profile.height} cm` : 'Not set'}
-                </ThemedText>
-              </View>
-
-              <View style={styles.profileCard}>
-                <View style={styles.profileIconContainer}>
-                  <Ionicons name="fitness" size={24} color={DesignColors.gray500} />
-                </View>
-                <ThemedText style={styles.profileLabel}>Weight</ThemedText>
-                <ThemedText style={styles.profileValue}>
-                  {profile.weight ? `${profile.weight} kg` : 'Not set'}
-                </ThemedText>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.emptyState}>
-              <Ionicons name="person-circle-outline" size={48} color={DesignColors.gray400} />
-              <ThemedText style={styles.emptyStateText}>No profile information set</ThemedText>
-              <ThemedText style={styles.emptyStateSubtext}>
-                Add your age, height, and weight to get personalized recommendations
-              </ThemedText>
-            </View>
-          )}
-
-          <Pressable 
-            style={styles.editButton} 
-            onPress={() => setModalVisible(true)}>
-            <Ionicons name="create-outline" size={20} color={DesignColors.white} />
-            <ThemedText style={styles.editButtonText}>
-              {profile.age || profile.height || profile.weight ? 'Edit Profile' : 'Add Profile Info'}
-            </ThemedText>
-          </Pressable>
+          <ListRow
+            title="Biological Sex"
+            subtitle={getSexLabel(goals?.sex ?? null)}
+            onPress={() => (hasGoals ? setSexActivityModalVisible(true) : handleAdjustGoals())}
+            leftIcon={<Ionicons name="male-female-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
+          <ListRow
+            title="Current Weight"
+            subtitle={weightSubLabel}
+            onPress={() => setWeightModalVisible(true)}
+            leftIcon={<Ionicons name="fitness-outline" size={20} color={DesignColors.black} />}
+            accessory={<Chip label={weightLabel} selected={false} />}
+          />
+          <ListRow
+            title="Height"
+            subtitle={goals?.heightCm != null ? `${Math.round(goals.heightCm)} cm` : 'Not set'}
+            onPress={handleAdjustGoals}
+            leftIcon={<Ionicons name="resize-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
+          <ListRow
+            title="Date of Birth"
+            subtitle={`${birthdateLabel} • ${ageLabel}`}
+            onPress={handleAdjustGoals}
+            leftIcon={<Ionicons name="calendar-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
+          <ListRow
+            title="Activity Level"
+            subtitle={getActivityLabel(goals?.activityLevel ?? null)}
+            onPress={() => (hasGoals ? setSexActivityModalVisible(true) : handleAdjustGoals())}
+            leftIcon={<Ionicons name="walk-outline" size={20} color={DesignColors.black} />}
+            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
+          />
         </Card>
 
         {/* Goals */}
         <Card style={styles.sectionCard} elevation="sm">
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Goals</ThemedText>
-            {hasGoals() && dailyTargets ? (
+            {hasGoals && dailyTargets ? (
               <Chip label={`${dailyTargets.calories} cal/day`} />
             ) : (
               <Badge label="Not set" tone="warning" />
             )}
           </View>
           <ListRow
-            title="Personal Details"
-            subtitle="Age, height, weight"
-            onPress={() => setModalVisible(true)}
-            leftIcon={<Ionicons name="person-outline" size={20} color={DesignColors.black} />}
-            accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
-          />
-          <ListRow
             title="Adjust Goals"
-            subtitle={hasGoals() && dailyTargets ? `Daily target: ${dailyTargets.calories} cal` : 'Set your calorie and macro targets'}
+            subtitle={hasGoals && dailyTargets ? `Daily target: ${dailyTargets.calories} cal` : 'Set your calorie and macro targets'}
             onPress={handleAdjustGoals}
             leftIcon={<Ionicons name="nutrition-outline" size={20} color={DesignColors.black} />}
             accessory={<Ionicons name="chevron-forward" size={20} color={DesignColors.gray400} />}
@@ -155,9 +275,19 @@ export default function SettingsScreen() {
         </Card>
       </ScrollView>
 
-      <ProfileInputModal 
-        visible={modalVisible} 
-        onClose={() => setModalVisible(false)} 
+      <SexActivityModal
+        visible={sexActivityModalVisible}
+        sex={goals?.sex ?? 'male'}
+        activityLevel={goals?.activityLevel ?? 'sedentary'}
+        onClose={() => setSexActivityModalVisible(false)}
+        onSave={handleSaveSexActivity}
+      />
+
+      <WeightEntryModal
+        visible={weightModalVisible}
+        initialWeightKg={displayedWeightKg}
+        onClose={() => setWeightModalVisible(false)}
+        onSave={handleSaveWeightToday}
       />
     </SafeAreaView>
   );
@@ -166,129 +296,74 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: DesignColors.background,
+    backgroundColor: 'transparent',
   },
   content: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
-    gap: 32,
+    paddingVertical: 24,
+    gap: 20,
   },
-  header: {
+  profileHeader: {
+    padding: 20,
+  },
+  profileHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  subtitle: {
-    color: DesignColors.gray600,
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: DesignColors.gray100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: DesignColors.gray200,
   },
-  section: {
-    gap: 20,
+  profileHeaderCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  profileHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: DesignColors.black,
+  },
+  profileHeaderSubtitle: {
+    fontSize: 13,
+    color: DesignColors.gray500,
+  },
+  banner: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: DesignColors.warningBorder,
+    backgroundColor: DesignColors.warningBg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: DesignColors.warningDark,
+    lineHeight: 18,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: DesignColors.black,
   },
-  profileGrid: {
-    flexDirection: 'row',
+  sectionCard: {
     gap: 12,
   },
-  profileCard: {
-    flex: 1,
-    backgroundColor: DesignColors.gray50,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: 'center',
-    gap: 8,
-    borderWidth: 1,
-    borderColor: DesignColors.gray200,
-  },
-  profileIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: DesignColors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  profileLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: DesignColors.gray500,
-    textAlign: 'center',
-  },
-  profileValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DesignColors.black,
-    textAlign: 'center',
-  },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    gap: 12,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: DesignColors.gray500,
-  },
-  emptyStateSubtext: {
-    fontSize: 14,
-    color: DesignColors.gray500,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: DesignColors.primary,
-  },
-  editButtonText: {
-    color: DesignColors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  settingsRow: {
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: DesignColors.gray50,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: DesignColors.gray200,
-  },
-  settingsRowLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  settingsIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: DesignColors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  settingsRowContent: {
-    flex: 1,
-    gap: 4,
-  },
-  settingsRowText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: DesignColors.black,
-  },
-  settingsRowSubtext: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: DesignColors.gray500,
   },
 });

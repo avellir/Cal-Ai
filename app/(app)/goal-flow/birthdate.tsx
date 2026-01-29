@@ -83,13 +83,13 @@ export default function BirthdateScreen() {
     
     // Save to context
     setBirthdate(birthDate, age);
-    router.push('/goal-flow/goal-selection');
+    router.push('/goal-flow/sex-activity');
   };
 
   return (
     <GoalFlowLayout
       currentStep={2}
-      totalSteps={6}
+      totalSteps={7}
       title="When were you born?"
       subtitle="We use your age to calculate accurate calorie needs">
       <ScrollView

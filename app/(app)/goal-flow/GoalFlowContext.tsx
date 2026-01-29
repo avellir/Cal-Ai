@@ -7,7 +7,7 @@
  * Requirements: 1.3, 2.6, 3.5, 4.5, 5.8
  */
 
-import type { GoalType, UnitSystem } from '@/lib/user-goals-types';
+import type { ActivityLevel, GoalType, Sex, UnitSystem } from '@/lib/user-goals-types';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
@@ -25,13 +25,17 @@ type GoalFlowState = {
   birthdate: Date | null;
   age: number | null;
 
-  // Step 3: Goal
+  // Step 3: Personal details for calculations
+  sex: Sex;
+  activityLevel: ActivityLevel;
+
+  // Step 4: Goal
   goalType: GoalType | null;
 
-  // Step 4: Target Weight
+  // Step 5: Target Weight
   targetWeightKg: number | null;
 
-  // Step 5: Calculated values
+  // Step 6: Calculated values
   dailyCalories: number | null;
   dailyProtein: number | null;
   dailyCarbs: number | null;
@@ -45,6 +49,7 @@ type GoalFlowState = {
 type GoalFlowActions = {
   setHeightWeight: (unitSystem: UnitSystem, heightCm: number, weightKg: number) => void;
   setBirthdate: (birthdate: Date, age: number) => void;
+  setSexActivity: (sex: Sex, activityLevel: ActivityLevel) => void;
   setGoal: (goalType: GoalType) => void;
   setTargetWeight: (targetWeightKg: number) => void;
   setCalculatedValues: (
@@ -72,6 +77,8 @@ const initialState: GoalFlowState = {
   weightKg: null,
   birthdate: null,
   age: null,
+  sex: 'male',
+  activityLevel: 'sedentary',
   goalType: null,
   targetWeightKg: null,
   dailyCalories: null,
@@ -107,6 +114,8 @@ export function GoalFlowProvider({ children }: { children: ReactNode }) {
         weightKg: goals.weightKg,
         birthdate: new Date(goals.birthdate),
         age: goals.age,
+        sex: goals.sex ?? 'male',
+        activityLevel: goals.activityLevel ?? 'sedentary',
         goalType: goals.goalType,
         targetWeightKg: goals.targetWeightKg,
         dailyCalories: goals.dailyCalories,
@@ -138,6 +147,14 @@ export function GoalFlowProvider({ children }: { children: ReactNode }) {
       ...prev,
       birthdate,
       age,
+    }));
+  };
+
+  const setSexActivity = (sex: Sex, activityLevel: ActivityLevel) => {
+    setState((prev) => ({
+      ...prev,
+      sex,
+      activityLevel,
     }));
   };
 
@@ -197,6 +214,7 @@ export function GoalFlowProvider({ children }: { children: ReactNode }) {
     ...state,
     setHeightWeight,
     setBirthdate,
+    setSexActivity,
     setGoal,
     setTargetWeight,
     setCalculatedValues,

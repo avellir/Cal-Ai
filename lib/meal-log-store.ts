@@ -10,6 +10,33 @@ type MealLogStatus = 'idle' | 'loading';
 
 type ImageCache = Record<string, string>; // mealId -> imageUri
 
+/**
+ * Resolves the image source for a meal with cache-first logic.
+ * Prefers cached local URI over remote storage URL for fast loading.
+ * 
+ * @param cachedUri - The locally cached image URI (from AsyncStorage cache)
+ * @param remoteUrl - The remote storage URL (from database)
+ * @returns The resolved image URI, or null if neither is available
+ * 
+ * Requirements: 2.2 (prefer cache), 2.3 (fallback to remote)
+ */
+export function resolveImageUri(
+  cachedUri: string | null | undefined,
+  remoteUrl: string | null | undefined
+): string | null {
+  // Prefer cached local URI when available (Requirement 2.2)
+  if (cachedUri && cachedUri.trim().length > 0) {
+    return cachedUri;
+  }
+  
+  // Fall back to remote storage URL (Requirement 2.3)
+  if (remoteUrl && remoteUrl.trim().length > 0) {
+    return remoteUrl;
+  }
+  
+  return null;
+}
+
 type MealLogState = {
   meals: MealLogEntry[];
   status: MealLogStatus;

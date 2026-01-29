@@ -4,8 +4,8 @@
  * Implements nutritional calculations for personalized nutrition goals:
  * - BMR (Basal Metabolic Rate) using Mifflin-St Jeor equation
  * - TDEE (Total Daily Energy Expenditure)
- * - Daily calorie targets based on fitness goals
- * - Macronutrient distribution (protein, carbs, fat)
+ * - Daily calorie targets based on fitness goals (uses activity + sex)
+ * - Macronutrient targets (protein, carbs, fat)
  * 
  * Requirements: 9.1, 9.2, 9.3, 9.4, 9.5, 9.6, 10.1, 10.2, 10.3, 10.4, 10.5
  */
@@ -21,15 +21,7 @@ const CALORIES_PER_GRAM = {
   fat: 9,
 } as const;
 
-/**
- * Macro distribution percentages (30/40/30 split)
- * Requirement 10.1, 10.2, 10.3
- */
-const MACRO_PERCENTAGES = {
-  protein: 0.30,  // 30% of calories
-  carbs: 0.40,    // 40% of calories
-  fat: 0.30,      // 30% of calories
-} as const;
+const KCAL_PER_KG_WEIGHT_CHANGE = 7700;
 
 /**
  * Activity level multipliers for TDEE calculation
@@ -44,16 +36,15 @@ const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
 };
 
 /**
- * Calorie adjustment for weight goals (500 cal/day = ~1 lb/week)
- * Requirements 9.3, 9.4
- */
-const CALORIE_ADJUSTMENT = 500;
-
-/**
  * Minimum safe daily calorie intake
  * Requirement 9.6
  */
-const MINIMUM_CALORIES = 1200;
+const MINIMUM_CALORIES_BY_SEX: Record<Sex, number> = {
+  female: 1200,
+  male: 1500,
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 /**
  * Calculate Basal Metabolic Rate using Mifflin-St Jeor equation
@@ -105,69 +96,104 @@ export function calculateTDEE(
 /**
  * Calculate daily calorie target based on fitness goal
  * 
- * - Lose weight: TDEE - 500 calories (1 lb/week deficit)
- * - Gain weight: TDEE + 500 calories (1 lb/week surplus)
+ * Uses a percent-based adjustment of TDEE (more adaptive across body sizes):
+ * - Lose weight: ~20% deficit (clamped)
+ * - Gain weight: ~10% surplus (clamped)
  * 
- * Ensures minimum safe calorie intake of 1200 calories
+ * Ensures minimum safe calorie intake (sex-based)
  * 
  * Requirements 9.3, 9.4, 9.5, 9.6
  * 
  * @param tdee - Total Daily Energy Expenditure
  * @param goalType - Fitness goal ('lose' or 'gain')
+ * @param sex - Biological sex ('male' or 'female')
  * @returns Daily calorie target (rounded to nearest whole number)
  */
 export function calculateDailyCalories(
   tdee: number,
-  goalType: GoalType
+  goalType: GoalType,
+  sex: Sex = 'male'
 ): number {
-  let targetCalories: number;
-  
-  if (goalType === 'lose') {
-    // Create calorie deficit for weight loss
-    targetCalories = tdee - CALORIE_ADJUSTMENT;
-  } else {
-    // Create calorie surplus for weight gain
-    targetCalories = tdee + CALORIE_ADJUSTMENT;
-  }
-  
-  // Apply safety minimum (Requirement 9.6)
-  targetCalories = Math.max(targetCalories, MINIMUM_CALORIES);
-  
+  const adjustment =
+    goalType === 'lose'
+      ? clamp(tdee * 0.2, 250, 800)
+      : clamp(tdee * 0.1, 150, 500);
+
+  const minimum = MINIMUM_CALORIES_BY_SEX[sex] ?? MINIMUM_CALORIES_BY_SEX.male;
+  const targetCalories = Math.max(goalType === 'lose' ? tdee - adjustment : tdee + adjustment, minimum);
+
   // Round to nearest whole number (Requirement 9.5)
   return Math.round(targetCalories);
 }
 
 /**
- * Calculate macronutrient distribution from daily calories
+ * Calculate macronutrient targets from daily calories and user inputs
  * 
- * Uses 30/40/30 split:
- * - Protein: 30% of calories / 4 cal per gram
- * - Carbs: 40% of calories / 4 cal per gram
- * - Fat: 30% of calories / 9 cal per gram
+ * Strategy:
+ * - Protein is set by activity level and goal (g/kg), then clamped to a calories share
+ * - Fat is set to a calories share with a minimum g/kg
+ * - Carbs are the remaining calories
  * 
  * All values rounded to nearest whole number
  * 
  * Requirements 10.1, 10.2, 10.3, 10.4, 10.5
  * 
  * @param dailyCalories - Target daily calorie intake
+ * @param weightKg - Current weight in kilograms
+ * @param goalType - Fitness goal ('lose' or 'gain')
+ * @param activityLevel - Activity level
  * @returns Object with protein, carbs, and fat in grams
  */
-export function calculateMacros(dailyCalories: number): {
+export function calculateMacros(
+  dailyCalories: number,
+  weightKg: number,
+  goalType: GoalType,
+  activityLevel: ActivityLevel = 'sedentary'
+): {
   protein: number;
   carbs: number;
   fat: number;
 } {
-  // Calculate grams for each macro (Requirements 10.1, 10.2, 10.3)
-  const proteinGrams = (dailyCalories * MACRO_PERCENTAGES.protein) / CALORIES_PER_GRAM.protein;
-  const carbsGrams = (dailyCalories * MACRO_PERCENTAGES.carbs) / CALORIES_PER_GRAM.carbs;
-  const fatGrams = (dailyCalories * MACRO_PERCENTAGES.fat) / CALORIES_PER_GRAM.fat;
-  
-  // Round all values to nearest whole number (Requirement 10.4)
-  return {
-    protein: Math.round(proteinGrams),
-    carbs: Math.round(carbsGrams),
-    fat: Math.round(fatGrams),
+  const proteinGPerKgByActivity: Record<ActivityLevel, number> = {
+    sedentary: 1.4,
+    light: 1.6,
+    moderate: 1.8,
+    active: 2.0,
+    veryActive: 2.2,
   };
+
+  const proteinBonus = goalType === 'lose' ? 0.2 : 0;
+  const desiredProteinG = weightKg * clamp((proteinGPerKgByActivity[activityLevel] ?? 1.6) + proteinBonus, 1.2, 2.4);
+  const proteinCaloriesCap = dailyCalories * (goalType === 'lose' ? 0.45 : 0.4);
+  const proteinCalories = Math.min(desiredProteinG * CALORIES_PER_GRAM.protein, proteinCaloriesCap);
+  const protein = Math.max(0, Math.round(proteinCalories / CALORIES_PER_GRAM.protein));
+
+  const minFatG = weightKg * 0.6;
+  const desiredFatCaloriesShare = goalType === 'lose' ? 0.25 : 0.3;
+  const fatCaloriesCap = dailyCalories * 0.35;
+  let fatCalories = clamp(dailyCalories * desiredFatCaloriesShare, minFatG * CALORIES_PER_GRAM.fat, fatCaloriesCap);
+  let fat = Math.max(0, Math.round(fatCalories / CALORIES_PER_GRAM.fat));
+
+  // Fit macros into the calorie budget. If we run out, reduce fat first, then protein.
+  let remainingCalories = dailyCalories - (protein * CALORIES_PER_GRAM.protein) - (fat * CALORIES_PER_GRAM.fat);
+  if (remainingCalories < 0) {
+    const maxFatCalories = Math.max(0, dailyCalories - (protein * CALORIES_PER_GRAM.protein));
+    const minFatCalories = Math.max(0, minFatG * CALORIES_PER_GRAM.fat);
+    fatCalories = Math.max(minFatCalories, maxFatCalories);
+    fat = Math.max(0, Math.floor(fatCalories / CALORIES_PER_GRAM.fat));
+    remainingCalories = dailyCalories - (protein * CALORIES_PER_GRAM.protein) - (fat * CALORIES_PER_GRAM.fat);
+  }
+
+  if (remainingCalories < 0) {
+    const maxProteinCalories = Math.max(0, dailyCalories - (fat * CALORIES_PER_GRAM.fat));
+    const nextProtein = Math.max(0, Math.floor(maxProteinCalories / CALORIES_PER_GRAM.protein));
+    remainingCalories = dailyCalories - (nextProtein * CALORIES_PER_GRAM.protein) - (fat * CALORIES_PER_GRAM.fat);
+    return { protein: nextProtein, carbs: 0, fat };
+  }
+
+  const carbs = Math.max(0, Math.floor(remainingCalories / CALORIES_PER_GRAM.carbs));
+
+  return { protein, carbs, fat };
 }
 
 /**
@@ -205,16 +231,19 @@ export function calculateNutritionPlan(
   const tdee = calculateTDEE(bmr, activityLevel);
   
   // Step 3: Adjust for goal
-  const dailyCalories = calculateDailyCalories(tdee, goalType);
+  const dailyCalories = calculateDailyCalories(tdee, goalType, sex);
   
   // Step 4: Calculate macros
-  const macros = calculateMacros(dailyCalories);
+  const macros = calculateMacros(dailyCalories, weightKg, goalType, activityLevel);
   
   // Step 5: Estimate timeline
-  // Weight difference in kg, converted to lbs, divided by 1 lb/week
   const weightDifferenceKg = Math.abs(targetWeightKg - weightKg);
-  const weightDifferenceLbs = weightDifferenceKg * 2.20462; // kg to lbs
-  const estimatedWeeksToGoal = Math.ceil(weightDifferenceLbs); // ~1 lb per week
+  const adjustment =
+    goalType === 'lose'
+      ? clamp(tdee * 0.2, 250, 800)
+      : clamp(tdee * 0.1, 150, 500);
+  const estimatedWeeklyChangeKg = (adjustment * 7) / KCAL_PER_KG_WEIGHT_CHANGE;
+  const estimatedWeeksToGoal = Math.max(1, Math.ceil(weightDifferenceKg / Math.max(estimatedWeeklyChangeKg, 0.01)));
   
   return {
     dailyCalories,

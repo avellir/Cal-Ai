@@ -4,6 +4,7 @@ import { AnimationDurations, BorderRadius, DesignColors, Layout, Spacing, Typogr
 import { useSessionStore } from '@/lib/session-store';
 import type { GoalFlowData } from '@/lib/user-goals-types';
 import { calculateNutritionPlan } from '@/services/goalCalculation';
+import { addUserWeightEntry } from '@/services/userWeightEntries';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -83,6 +84,8 @@ export default function ResultsScreen() {
     heightCm,
     weightKg,
     age,
+    sex,
+    activityLevel,
     setCalculatedValues
   } = useGoalFlow();
 
@@ -106,7 +109,9 @@ export default function ResultsScreen() {
         heightCm,
         age,
         goalType,
-        targetWeightKg
+        targetWeightKg,
+        sex,
+        activityLevel
       );
 
       return {
@@ -138,7 +143,9 @@ export default function ResultsScreen() {
         heightCm,
         age,
         goalType,
-        targetWeightKg
+        targetWeightKg,
+        sex,
+        activityLevel
       );
 
       setCalculatedValues(
@@ -149,7 +156,7 @@ export default function ResultsScreen() {
         nutritionPlan.estimatedWeeksToGoal
       );
     }
-  }, [dailyCalories, heightCm, weightKg, age, goalType, targetWeightKg, setCalculatedValues]);
+  }, [dailyCalories, heightCm, weightKg, age, sex, activityLevel, goalType, targetWeightKg, setCalculatedValues]);
 
   // Format goal summary
   const getGoalSummary = () => {
@@ -232,6 +239,8 @@ export default function ResultsScreen() {
         weightKg: state.weightKg,
         birthdate: state.birthdate,
         age: state.age,
+        sex: state.sex,
+        activityLevel: state.activityLevel,
         goalType: state.goalType,
         targetWeightKg: state.targetWeightKg,
         dailyCalories: finalCalories,
@@ -246,6 +255,10 @@ export default function ResultsScreen() {
       if (success) {
         // Clear any pending goals
         await clearPendingGoals();
+
+        // Seed/update the weight log with the current weight captured in the flow.
+        // If this fails (e.g. user hasn't applied migrations yet), we don't block onboarding.
+        await addUserWeightEntry(session.user.id, goalFlowData.weightKg).catch(() => null);
 
         // Clear context state
         clearState();
@@ -267,6 +280,8 @@ export default function ResultsScreen() {
         weightKg: state.weightKg!,
         birthdate: state.birthdate!,
         age: state.age!,
+        sex: state.sex,
+        activityLevel: state.activityLevel,
         goalType: state.goalType!,
         targetWeightKg: state.targetWeightKg!,
         dailyCalories: finalCalories,
@@ -306,8 +321,8 @@ export default function ResultsScreen() {
 
   return (
     <GoalFlowLayout
-      currentStep={6}
-      totalSteps={6}
+      currentStep={7}
+      totalSteps={7}
       title="Congratulations your custom plan is ready!"
       subtitle="You can edit these values anytime.">
       <ScrollView

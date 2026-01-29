@@ -19,6 +19,9 @@ import {
 } from '@/lib/advanced-food-analysis-types';
 import {
     detectEdgeCases,
+    adjustBeverageUnits,
+    extractSingleIngredientName,
+    limitToTopIngredients,
     extractNutritionFromLabel
 } from './advancedFoodEdgeCases';
 import {
@@ -30,6 +33,7 @@ import {
 import { validateAdvancedAnalysis } from './advancedFoodValidation';
 import { lookupIngredientNutrition } from './fatSecretApi';
 import { runGeminiRequest } from './geminiService';
+import { deduplicateIngredients } from './ingredientDeduplication';
 import { validatePortionSize } from './portionValidation';
 
 // ============================================================================
@@ -41,66 +45,38 @@ import { validatePortionSize } from './portionValidation';
  * Performs both food region identification AND ingredient breakdown in a single API call
  * Uses weight_grams directly for cleaner data flow
  */
-const COMBINED_ANALYSIS_PROMPT = `You are an expert nutritionist and computer vision analyst. Analyze the food image provided to output a strict JSON object containing segmentation and nutritional decomposition.
+const COMBINED_ANALYSIS_PROMPT = `Analyze food image. Return MINIMAL JSON with nutritional breakdown.
 
-## STAGE 1: VISUAL ANALYSIS STRATEGY
-1. **Identify Distinct Regions:** Separate main dishes, sides, and drinks.
-2. **Structural vs. Additive Inference:**
-   - **REQUIRED:** You MAY infer structural components essential to a dish's physics (e.g., if you see a Burger, you include the bottom bun; if you see Pizza, you include the crust underneath).
-   - **FORBIDDEN:** Do NOT infer invisible additives (e.g., cooking oils, melted butter, sugar, salt) unless there is clear visual evidence (sheen, pooling, crystals).
-3. **Volume-to-Weight Estimation:** Use visual cues (plate size, cutlery) to estimate volume, then apply density to find weight (grams).
+RULES:
+- Only include ingredients with confidence >= 40
+- Use conservative weight estimates (grams)
+- DO NOT infer hidden ingredients (oils, butter, salt) unless visually evident
+- Include structural components (bun, crust, bread) even if partially hidden
+- Keep descriptions SHORT (1-3 words max)
+- Limit to MAX 10 ingredients per region
 
-## PORTION REFERENCE DATABASE (Use these baselines - BE CONSERVATIVE):
-- **Pizza (Whole):** Neapolitan (350-450g total), American Slice (120-150g). *Note: The dough alone is usually 250g+. Never estimate a whole pizza <350g.*
-- **Sandwiches/Burgers:** Bun + Meat + Toppings = 250-400g total.
-- **Proteins - BE CONSERVATIVE:**
-  - Sliced chicken on a plate: 100-120g (NOT 150-180g unless clearly a large portion)
-  - Whole chicken breast: 120-150g
-  - Steak: 150-180g
-  - Salmon fillet: 120-150g
-  - Scrambled eggs (typical portion): 80-100g (about 2 eggs)
-  - Single egg: 50g
-  - Prosciutto/ham: 30-50g
-- **Starches:** Cooked Rice/Pasta cup (150g), Slice of bread (30-35g), Two bread slices (60-70g), Pizza dough (250-300g).
-- **Vegetables:** Leafy greens/spinach (30-40g), Dense veg/broccoli (60-80g).
-- **Dairy:** Mozzarella (80-120g), Cheese slice (20g), Parmesan (15g), Feta crumbles (25-40g), Yogurt/Labneh dollop (25-40g - smooth white = yogurt NOT feta), Sour cream (20-30g).
-- **Small/Garnish:** Cherry tomato (10g), Olives (15-20g), Sauce dollop (15-20g), Fresh herbs/arugula (15g), Hummus portion (20-30g), Red pepper paste (15g).
+PORTION GUIDE (grams):
+Proteins: chicken breast 120-150, steak 150-180, salmon 120-150, eggs 50 each
+Starches: rice/pasta cup 150, bread slice 30-35, pizza dough 250-300
+Dairy: mozzarella 80-120, cheese slice 20, yogurt dollop 25-40
+Vegetables: leafy greens 30-40, dense veg 60-80
+Small items: cherry tomato 10, olives 15-20, sauce 15-20, herbs 15
 
-## RESPONSE FORMAT (Strict JSON):
+OUTPUT FORMAT:
 {
-  "regions": [
-    {
-      "description": "Brief visual description",
-      "dishName": "Formal name (e.g., 'Margherita Pizza')",
-      "confidence": number (0-100),
-      "boundingBox": { "ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000 },
-      "ingredients": [
-        {
-          "name": "Specific component (e.g., 'Pizza Dough', 'Mozzarella')",
-          "weight_grams": number (integer),
-          "confidence": number (0-100),
-          "visual_evidence": "1-3 words (e.g., 'visible', 'inferred')"
-        }
-      ]
-    }
-  ],
-  "overallConfidence": number (0-100),
-  "total_plate_weight_grams": number,
-  "notes": "Any ambiguity regarding hidden ingredients or image quality"
+  "regions": [{
+    "description": "short description",
+    "dishName": "dish name",
+    "confidence": 0-100,
+    "boundingBox": {"ymin":0,"xmin":0,"ymax":1000,"xmax":1000},
+    "ingredients": [{"name":"ingredient","weight_grams":100,"confidence":80,"visual_evidence":"visible"}]
+  }],
+  "overallConfidence": 0-100,
+  "total_plate_weight_grams": 0,
+  "notes": ""
 }
 
-## CRITICAL RULES:
-1. **Conservative but Realistic:** Do not overestimate, BUT do not ignore the density of carbs (bread/dough is heavy).
-2. **Granularity:** Break dishes down into components (e.g., a "Burger" region should list: Bun, Patty, Lettuce, Tomato, Sauce).
-3. **Confidence Scoring:**
-   - <40: Do not include the ingredient.
-   - 40-60: Visible but quantity/type unclear.
-   - 60-80: Visible with reasonable certainty.
-   - 80+: Clearly visible and identifiable.
-4. **Units:** ALWAYS provide 'weight_grams' as an integer. If the item is liquid, estimate density (1ml ≈ 1g) and report grams.
-5. **Structural Components:** Always include the base/foundation of dishes (pizza crust, burger bun, sandwich bread) even if partially hidden.
-
-If no food is detected, return an empty "regions" array with explanatory notes.`;
+If no food detected, return empty regions array.`;
 
 
 // ============================================================================
@@ -131,9 +107,67 @@ type CombinedAnalysisResult = {
     notes?: string;
 };
 
+const DEFAULT_GEMINI_TEMPERATURE = 0.1;
+
+const BEVERAGE_KEYWORDS = [
+    'juice',
+    'soda',
+    'water',
+    'coffee',
+    'tea',
+    'milk',
+    'smoothie',
+    'shake',
+    'beer',
+    'wine',
+    'cocktail',
+];
+
+function isBeverageIngredient(name: string): boolean {
+    const nameLower = name.toLowerCase();
+    return BEVERAGE_KEYWORDS.some(keyword => nameLower.includes(keyword));
+}
+
+function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+}
+
+function normalizeBeverageQuantityMl(quantityMl: number): {
+    adjustedQuantity: number;
+    wasAdjusted: boolean;
+    confidencePenalty: number;
+    reason: string;
+} {
+    if (!Number.isFinite(quantityMl) || quantityMl <= 0) {
+        return {
+            adjustedQuantity: 250,
+            wasAdjusted: true,
+            confidencePenalty: 15,
+            reason: `Beverage volume was invalid (${quantityMl}). Defaulted to 250ml for stability.`,
+        };
+    }
+
+    // Keep this mild: clamp extremes and round to reduce jitter across runs.
+    const clamped = clamp(quantityMl, 30, 600);
+    const rounded = Math.round(clamped / 25) * 25;
+    const adjustedQuantity = clamp(rounded, 30, 600);
+
+    const wasAdjusted = adjustedQuantity !== quantityMl;
+    if (!wasAdjusted) {
+        return { adjustedQuantity, wasAdjusted: false, confidencePenalty: 0, reason: '' };
+    }
+
+    const diffRatio = Math.abs(adjustedQuantity - quantityMl) / Math.max(1, quantityMl);
+    const confidencePenalty = clamp(Math.round(diffRatio * 20), 3, 15);
+    const reason = `Beverage volume normalized from ${quantityMl.toFixed(0)}ml to ${adjustedQuantity.toFixed(0)}ml for stability.`;
+
+    return { adjustedQuantity, wasAdjusted: true, confidencePenalty, reason };
+}
+
 export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: string): Promise<AdvancedAnalysisResult> {
     const startTime = Date.now();
     const stagesCompleted: string[] = [];
+    const warnings: string[] = [];
 
     try {
         // 0. Preparation
@@ -218,29 +252,77 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             return true;
         });
 
-        // 3.5. Portion Validation - Adjust unrealistic weight estimates
+        // 3.3 Convert to canonical Ingredient shape for downstream processing
+        let ingredientsForProcessing: Ingredient[] = filteredIngredients.map(ing => ({
+            name: ing.name,
+            quantity: ing.weight_grams,
+            unit: 'g',
+            confidence: ing.confidence
+        }));
+
+        // 3.4 Edge-case handling that affects ingredient stability
+        if (edgeCase?.type === 'single_ingredient' && segmentationData.regions.length === 1) {
+            stagesCompleted.push('single_ingredient_normalization');
+            const extractedName = extractSingleIngredientName(segmentationData.regions[0]);
+
+            const normalizedTarget = extractedName.toLowerCase();
+            const bestMatch =
+                ingredientsForProcessing.find(i => i.name.toLowerCase().includes(normalizedTarget) || normalizedTarget.includes(i.name.toLowerCase())) ??
+                [...ingredientsForProcessing].sort((a, b) => b.confidence - a.confidence)[0];
+
+            const fallbackQuantity =
+                (bestMatch?.quantity && Number.isFinite(bestMatch.quantity) ? bestMatch.quantity : undefined) ??
+                (combinedResult.total_plate_weight_grams && combinedResult.total_plate_weight_grams > 0 ? combinedResult.total_plate_weight_grams : undefined) ??
+                100;
+
+            ingredientsForProcessing = [
+                {
+                    name: extractedName,
+                    quantity: fallbackQuantity,
+                    unit: 'g',
+                    confidence: clamp(bestMatch?.confidence ?? segmentationData.overallConfidence, 0, 100),
+                }
+            ];
+        }
+
+        // 3.5 Portion Validation - Adjust unrealistic portion estimates
         stagesCompleted.push('portion_validation');
-        const validatedIngredients = filteredIngredients.map(ing => {
+        ingredientsForProcessing = ingredientsForProcessing.map(ing => {
             try {
-                // New format uses weight_grams directly (always in grams)
-                const validation = validatePortionSize(
-                    ing.name,
-                    ing.weight_grams,
-                    'g' // Always grams now
-                );
+                // Handle beverages separately: weights from vision models are often jittery and
+                // the generic portion constraints are tuned for solids.
+                if (isBeverageIngredient(ing.name)) {
+                    const normalization = normalizeBeverageQuantityMl(ing.quantity);
+                    if (normalization.wasAdjusted) {
+                        console.log(
+                            `🥤 Beverage normalized: "${ing.name}" ${ing.quantity.toFixed(0)}ml → ${normalization.adjustedQuantity.toFixed(0)}ml ` +
+                            `(-${normalization.confidencePenalty}% confidence)`
+                        );
+                    }
+                    return {
+                        ...ing,
+                        unit: 'ml',
+                        quantity: normalization.adjustedQuantity,
+                        confidence: Math.max(0, ing.confidence - normalization.confidencePenalty),
+                        wasAdjusted: normalization.wasAdjusted ? true : ing.wasAdjusted,
+                        adjustmentReason: normalization.wasAdjusted ? normalization.reason : ing.adjustmentReason,
+                    };
+                }
+
+                const validation = validatePortionSize(ing.name, ing.quantity, 'g');
 
                 if (validation.wasAdjusted) {
                     console.log(
-                        `⚡ Portion adjusted: "${ing.name}" ${ing.weight_grams}g → ${validation.adjustedQuantity}g ` +
+                        `⚡ Portion adjusted: "${ing.name}" ${ing.quantity}g → ${validation.adjustedQuantity}g ` +
                         `(${validation.category}, -${validation.confidencePenalty}% confidence)`
                     );
                     return {
                         ...ing,
-                        weight_grams: validation.adjustedQuantity,
+                        quantity: validation.adjustedQuantity,
                         confidence: Math.max(0, ing.confidence - validation.confidencePenalty),
-                        _wasPortionAdjusted: true,
-                        _originalWeight: ing.weight_grams,
-                        _adjustmentReason: validation.reason
+                        category: validation.category,
+                        wasAdjusted: true,
+                        adjustmentReason: validation.reason
                     };
                 }
                 return ing;
@@ -250,28 +332,40 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             }
         });
 
+        // 3.6 Deduplicate to avoid double-counting across regions / synonyms
+        stagesCompleted.push('dedupe');
+        const dedupe = deduplicateIngredients(ingredientsForProcessing);
+        ingredientsForProcessing = dedupe.uniqueIngredients;
+        if (dedupe.mergedCount > 0) {
+            warnings.push(`Merged ${dedupe.mergedCount} duplicate ingredient(s) for consistency.`);
+        }
+
+        // 3.7 Complex mixed dish: limit to most prominent ingredients
+        if (edgeCase?.type === 'complex_mixed_dish') {
+            stagesCompleted.push('complex_dish_limit');
+            const limited = limitToTopIngredients(ingredientsForProcessing, 5);
+            if (limited.length < ingredientsForProcessing.length) {
+                warnings.push('Complex dish detected: limited to top ingredients for consistency.');
+            }
+            ingredientsForProcessing = limited;
+        }
+
+        // 3.8 Normalize beverage units (e.g., milk/coffee) to volume where applicable
+        ingredientsForProcessing = adjustBeverageUnits(ingredientsForProcessing);
+
         // 4. Nutritional Lookup
         stagesCompleted.push('lookup');
 
-        // Convert new format (weight_grams) to legacy format (quantity/unit) for lookupIngredientNutrition
-        const lookupPromises = validatedIngredients.map(async (ing) => {
-            // Create legacy-compatible ingredient object for the lookup function
-            const legacyIngredient: Ingredient = {
-                name: ing.name,
-                quantity: ing.weight_grams,
-                unit: 'g',
-                confidence: ing.confidence
-            };
-
-            const result = await lookupIngredientNutrition(legacyIngredient);
+        const lookupPromises = ingredientsForProcessing.map(async (ingredient) => {
+            const result = await lookupIngredientNutrition(ingredient);
             if (result) {
-                let finalConfidence = ing.confidence;
+                let finalConfidence = ingredient.confidence;
                 if (result.source !== 'fatsecret') {
                     finalConfidence -= result.confidencePenalty;
                 }
 
                 return {
-                    ...legacyIngredient,
+                    ...ingredient,
                     nutrition: {
                         foodId: result.foodId,
                         foodName: result.foodName,
@@ -309,11 +403,13 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 ingredients: validIngredients,
                 regions: segmentationData.regions,
                 confidence: segmentationData.overallConfidence, // Baseline confidence
-                warnings: []
+                warnings
             },
             metadata: {
                 processingTimeMs: Date.now() - startTime,
-                stagesCompleted
+                stagesCompleted,
+                ingredientMergeLog: dedupe.mergedCount > 0 ? dedupe.mergeLog : undefined,
+                edgeCase: edgeCase ?? undefined
             }
         };
 
@@ -340,15 +436,87 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 // ============================================================================
 
 /**
+ * Attempts to repair truncated JSON by closing open brackets/braces
+ * This handles cases where the API response was cut off mid-stream
+ */
+function attemptJsonRepair(jsonStr: string): string {
+    let repaired = jsonStr.trim();
+    
+    // Fix malformed floating-point numbers (e.g., "308.447723388671944553..." with excessive decimals)
+    // These can occur when the model generates invalid numeric output
+    repaired = repaired.replace(/:\s*(\d+\.\d{10,})\d*/g, (match, num) => {
+        // Truncate to 6 decimal places max
+        const truncated = parseFloat(num).toFixed(6);
+        return `: ${parseFloat(truncated)}`;
+    });
+    
+    // Count open brackets/braces
+    let openBraces = 0;
+    let openBrackets = 0;
+    let inString = false;
+    let escapeNext = false;
+    
+    for (const char of repaired) {
+        if (escapeNext) {
+            escapeNext = false;
+            continue;
+        }
+        if (char === '\\') {
+            escapeNext = true;
+            continue;
+        }
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+        if (inString) continue;
+        
+        if (char === '{') openBraces++;
+        else if (char === '}') openBraces--;
+        else if (char === '[') openBrackets++;
+        else if (char === ']') openBrackets--;
+    }
+    
+    // If we're in a string, close it
+    if (inString) {
+        repaired += '"';
+    }
+    
+    // Remove trailing incomplete key-value pairs (e.g., `"key":` or `"key": `)
+    repaired = repaired.replace(/,?\s*"[^"]*":\s*$/, '');
+    
+    // Close any open brackets/braces
+    while (openBrackets > 0) {
+        repaired += ']';
+        openBrackets--;
+    }
+    while (openBraces > 0) {
+        repaired += '}';
+        openBraces--;
+    }
+    
+    return repaired;
+}
+
+/**
  * Performs combined segmentation and decomposition in a SINGLE API call
  * This reduces API usage by 50-75% compared to separate calls
  */
 async function performCombinedAnalysis(apiKey: string, base64Image: string): Promise<CombinedAnalysisResult> {
+    const temperatureRaw =
+        process.env.EXPO_PUBLIC_GEMINI_TEMPERATURE ??
+        process.env.GOOGLE_GEMINI_TEMPERATURE;
+    const parsedTemperature = temperatureRaw !== undefined ? Number(temperatureRaw) : NaN;
+    const temperature = Number.isFinite(parsedTemperature)
+        ? clamp(parsedTemperature, 0, 1)
+        : DEFAULT_GEMINI_TEMPERATURE;
+
     const response = await runGeminiRequest({
         apiKey,
         prompt: COMBINED_ANALYSIS_PROMPT,
         base64Image,
-        maxOutputTokens: 8192,
+        temperature,
+        maxOutputTokens: 16384, // Increased from 8192 to handle complex meals
         responseSchema: {
             type: "object",
             properties: {
@@ -394,23 +562,41 @@ async function performCombinedAnalysis(apiKey: string, base64Image: string): Pro
         }
     });
 
+    // Log raw response for debugging
+    console.log('[CombinedAnalysis] Raw response length:', response.length);
+    console.log('[CombinedAnalysis] Raw response preview:', response.substring(0, 500));
+    
+    // First attempt: parse as-is
     try {
-        // Log raw response for debugging
-        console.log('[CombinedAnalysis] Raw response length:', response.length);
-        console.log('[CombinedAnalysis] Raw response preview:', response.substring(0, 500));
-        
         const parsed = JSON.parse(response);
         
-        // Validate the parsed result has required fields
         if (!parsed.regions || !Array.isArray(parsed.regions)) {
             console.error('[CombinedAnalysis] Invalid response structure - missing regions array');
             throw new Error("Invalid response: missing regions array");
         }
         
         return parsed as CombinedAnalysisResult;
-    } catch (e) {
-        console.error('[CombinedAnalysis] Parse error:', e);
-        console.error('[CombinedAnalysis] Full response:', response);
-        throw new Error(`Failed to parse combined analysis result: ${e instanceof Error ? e.message : 'Unknown error'}`);
+    } catch (firstError) {
+        console.warn('[CombinedAnalysis] Initial parse failed, attempting JSON repair...');
+        
+        // Second attempt: try to repair truncated JSON
+        try {
+            const repairedJson = attemptJsonRepair(response);
+            console.log('[CombinedAnalysis] Repaired JSON length:', repairedJson.length);
+            
+            const parsed = JSON.parse(repairedJson);
+            
+            if (!parsed.regions || !Array.isArray(parsed.regions)) {
+                throw new Error("Invalid response: missing regions array after repair");
+            }
+            
+            console.log('[CombinedAnalysis] JSON repair successful!');
+            return parsed as CombinedAnalysisResult;
+        } catch (repairError) {
+            console.error('[CombinedAnalysis] Parse error:', firstError);
+            console.error('[CombinedAnalysis] Repair also failed:', repairError);
+            console.error('[CombinedAnalysis] Full response:', response);
+            throw new Error(`Failed to parse combined analysis result: ${firstError instanceof Error ? firstError.message : 'Unknown error'}`);
+        }
     }
 }

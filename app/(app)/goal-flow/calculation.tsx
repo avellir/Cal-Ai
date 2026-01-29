@@ -22,6 +22,8 @@ export default function CalculationScreen() {
     heightCm,
     weightKg,
     age,
+    sex,
+    activityLevel,
     goalType,
     targetWeightKg,
     setCalculatedValues
@@ -42,7 +44,9 @@ export default function CalculationScreen() {
         heightCm,
         age,
         goalType,
-        targetWeightKg
+        targetWeightKg,
+        sex,
+        activityLevel
       );
 
       // Save calculated values to context
@@ -61,7 +65,7 @@ export default function CalculationScreen() {
     }, 2500);
 
     return () => clearTimeout(timer);
-  }, [heightCm, weightKg, age, goalType, targetWeightKg, setCalculatedValues, progressAnim, router]);
+  }, [heightCm, weightKg, age, sex, activityLevel, goalType, targetWeightKg, setCalculatedValues, progressAnim, router]);
 
   const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
@@ -70,8 +74,8 @@ export default function CalculationScreen() {
 
   return (
     <GoalFlowLayout
-      currentStep={5}
-      totalSteps={6}
+      currentStep={6}
+      totalSteps={7}
       title="We’re setting everything up"
       subtitle="Finalizing your results">
       <View style={styles.container}>

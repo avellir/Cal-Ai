@@ -30,6 +30,7 @@ You can also execute the SQL directly using any PostgreSQL client connected to y
 ## Migration Files
 
 - `20241024000000_create_user_goals_table.sql` - Creates the user_goals table with RLS policies for personalized nutrition goals
+- `20260129000000_add_sex_activity_and_weight_entries.sql` - Adds sex/activity_level to user_goals and creates user_weight_entries (weight log)
 
 ## Schema Overview
 
@@ -43,6 +44,8 @@ Stores personalized nutrition goals and recommendations for each user.
 - `height_cm` - User's height in centimeters (DECIMAL)
 - `weight_kg` - User's weight in kilograms (DECIMAL)
 - `birthdate` - User's date of birth (DATE)
+- `sex` - Biological sex for BMR calculation: 'male' or 'female' (TEXT)
+- `activity_level` - Activity multiplier for TDEE: 'sedentary' | 'light' | 'moderate' | 'active' | 'veryActive' (TEXT)
 - `goal_type` - Fitness goal: 'lose' or 'gain' (TEXT)
 - `target_weight_kg` - Target weight in kilograms (DECIMAL)
 - `daily_calories` - Calculated daily calorie target (INTEGER)
@@ -79,3 +82,18 @@ Age is not stored as a column due to PostgreSQL immutability constraints with ge
 - Use the `calculate_age()` function in SQL queries when needed
 - Use the `user_goals_with_age` view for convenience
 - Calculate age in the application layer using the `calculateAge()` utility function from `lib/user-goals-types.ts`
+
+### user_weight_entries Table
+
+Stores weight history entries per user (used by the “hybrid” Current Weight UX: display the latest, but save as a log).
+
+**Columns:**
+- `id` - Primary key (UUID)
+- `user_id` - Foreign key to auth.users (UUID)
+- `weight_kg` - Logged weight in kilograms (DECIMAL)
+- `recorded_at` - When the weight was recorded (TIMESTAMPTZ)
+- `created_at` - Insert timestamp (TIMESTAMPTZ)
+
+**RLS Policies:**
+- Users can SELECT their own weight entries
+- Users can INSERT their own weight entries

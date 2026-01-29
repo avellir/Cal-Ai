@@ -1,5 +1,6 @@
 import type { AddMealInput, MealLogEntry, MealType } from '@/lib/meal-log-types';
 import { supabase } from '@/lib/supabase';
+import { deleteMealPhoto, uploadMealPhoto } from './mealPhotoStorage';
 
 type MealEntryRow = {
   id: string;
@@ -21,6 +22,7 @@ type MealRow = {
   logged_at: string | null;
   meal_type: MealType | null;
   notes: string | null;
+  image_url: string | null;
   meal_entries: MealEntryRow[] | null;
 };
 
@@ -109,6 +111,7 @@ export async function fetchLoggedMeals(userId: string): Promise<MealLogEntry[]> 
         logged_at,
         meal_type,
         notes,
+        image_url,
         meal_entries (
           id,
           quantity,
@@ -132,7 +135,7 @@ export async function fetchLoggedMeals(userId: string): Promise<MealLogEntry[]> 
     throw error;
   }
 
-  return (data ?? []).map(mapMealRowToEntry);
+  return (data ?? []).map((row) => mapMealRowToEntry(row as unknown as MealRow));
 }
 
 export async function logMeal(userId: string, input: AddMealInput): Promise<MealLogEntry> {
@@ -201,23 +204,71 @@ export async function logMeal(userId: string, input: AddMealInput): Promise<Meal
     throw entryInsertError;
   }
 
+  // Handle image upload if imageUri is provided (Requirements: 1.1, 1.2, 1.3)
+  let imageUrl: string | null = null;
+  if (input.imageUri) {
+    try {
+      const uploadResult = await uploadMealPhoto(profileId, meal.id, input.imageUri);
+      
+      if (uploadResult.success && uploadResult.url) {
+        imageUrl = uploadResult.url;
+        
+        // Update meal record with image URL (Requirement 1.2)
+        await updateMealImageUrl(meal.id, imageUrl);
+      } else {
+        // Requirement 1.3: Log error but don't block meal creation
+        console.warn('Image upload failed, preserving local URI:', uploadResult.error);
+      }
+    } catch (error) {
+      // Requirement 1.3: Upload failure should not block meal creation
+      console.warn('Image upload error, preserving local URI:', error);
+    }
+  }
+
   const mappedEntry = mapMealRowToEntry({
     id: meal.id,
     logged_at: meal.logged_at ?? new Date().toISOString(),
     meal_type: (meal.meal_type ?? DEFAULT_MEAL_TYPE) as MealType,
     notes: meal.notes,
-    meal_entries: [mealEntry],
+    image_url: imageUrl,
+    meal_entries: [mealEntry as unknown as MealEntryRow],
   });
 
-  // Include the imageUri from input (stored locally, not in database)
+  // Include both imageUri (local cache) and imageUrl (remote storage)
   return {
     ...mappedEntry,
     imageUri: input.imageUri ?? null,
+    imageUrl,
   };
 }
 
+/**
+ * Updates a meal record with the storage image URL
+ * 
+ * Requirements: 1.2
+ */
+export async function updateMealImageUrl(
+  mealId: string,
+  imageUrl: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('logged_meals')
+    .update({ image_url: imageUrl })
+    .eq('id', mealId);
+
+  if (error) {
+    console.error('Failed to update meal image URL:', error);
+    throw error;
+  }
+}
+
 export async function deleteMeal(userId: string, mealId: string): Promise<void> {
-  await ensureProfile(userId);
+  const profileId = await ensureProfile(userId);
+
+  // Delete associated image from storage first (Requirement 1.4)
+  // This is done before deleting the meal record to ensure cleanup
+  // deleteMealPhoto handles file-not-found gracefully (idempotent)
+  await deleteMealPhoto(profileId, mealId);
 
   // Delete the logged meal (cascade will handle meal_entries)
   const { error } = await supabase
@@ -273,6 +324,7 @@ function mapMealRowToEntry(row: MealRow): MealLogEntry {
     macros,
     note: row.notes ?? firstFood?.serving_unit ?? null,
     imageUri: null,
+    imageUrl: row.image_url ?? null,  // Map image_url to imageUrl (Requirement 5.3)
     timestamp,
     mealType: (row.meal_type ?? DEFAULT_MEAL_TYPE) as MealType,
   };

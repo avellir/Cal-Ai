@@ -123,7 +123,7 @@ export default function HeightWeightScreen() {
   return (
     <GoalFlowLayout
       currentStep={1}
-      totalSteps={6}
+      totalSteps={7}
       title="Height & weight"
       subtitle="This helps us calculate your personalized nutrition goals">
       <ScrollView

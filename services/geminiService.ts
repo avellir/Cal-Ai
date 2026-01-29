@@ -240,10 +240,17 @@ export async function runGeminiRequest(params: GeminiRequest): Promise<string> {
 
             const result = await response.json();
             const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = result?.candidates?.[0]?.finishReason;
 
             if (!text) {
-                const finishReason = result?.candidates?.[0]?.finishReason;
                 throw new Error(finishReason ? `AI stopped early: ${finishReason}` : 'No response from Gemini AI');
+            }
+
+            // Check if response was truncated due to token limit
+            if (finishReason === 'MAX_TOKENS' || finishReason === 'LENGTH') {
+                console.warn(`[GeminiAPI] Response truncated (${finishReason}). Returning partial response for repair attempt.`);
+                // Return partial response - caller can attempt JSON repair
+                return sanitizeModelResponse(text);
             }
 
             return sanitizeModelResponse(text);
