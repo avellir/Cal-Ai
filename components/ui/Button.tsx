@@ -60,6 +60,7 @@ export function Button({
           backgroundColor: getBackground(),
           borderColor: getBorder(),
           opacity: isDisabled ? 0.6 : pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
       ]}>
@@ -78,12 +79,12 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    height: 56,
-    borderRadius: BorderRadius.round,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   content: {
     flexDirection: 'row',

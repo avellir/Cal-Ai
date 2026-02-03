@@ -33,6 +33,7 @@ export default function AppLayout() {
       <Stack.Screen name="food-result" options={{ headerShown: false }} />
       <Stack.Screen name="goal-flow" options={{ headerShown: false }} />
       <Stack.Screen name="meal-history" options={{ headerShown: false }} />
+      <Stack.Screen name="settings/body-metrics" options={{ title: 'Body Metrics' }} />
     </Stack>
   );
 }

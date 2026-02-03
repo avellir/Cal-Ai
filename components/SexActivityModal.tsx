@@ -15,6 +15,7 @@ import type { ActivityLevel, Sex } from '@/lib/user-goals-types';
 
 type SexActivityModalProps = {
   visible: boolean;
+  mode?: 'sex' | 'activity' | 'both';
   sex: Sex;
   activityLevel: ActivityLevel;
   onClose: () => void;
@@ -35,6 +36,7 @@ const ACTIVITY_OPTIONS: {
 
 export function SexActivityModal({
   visible,
+  mode = 'both',
   sex: initialSex,
   activityLevel: initialActivityLevel,
   onClose,
@@ -51,12 +53,27 @@ export function SexActivityModal({
     setIsSaving(false);
   }, [visible, initialSex, initialActivityLevel]);
 
-  const title = useMemo(() => 'Personal details', []);
+  const title = useMemo(() => {
+    switch (mode) {
+      case 'sex':
+        return 'Biological sex';
+      case 'activity':
+        return 'Activity level';
+      default:
+        return 'Personal details';
+    }
+  }, [mode]);
+
+  const showSex = mode === 'sex' || mode === 'both';
+  const showActivity = mode === 'activity' || mode === 'both';
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave({ sex, activityLevel });
+      await onSave({
+        sex: showSex ? sex : initialSex,
+        activityLevel: showActivity ? activityLevel : initialActivityLevel,
+      });
       onClose();
     } finally {
       setIsSaving(false);
@@ -67,74 +84,83 @@ export function SexActivityModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      transparent
       onRequestClose={onClose}>
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button">
-            <Ionicons name="close" size={24} color={DesignColors.black} />
-          </Pressable>
-          <Text style={styles.title}>{title}</Text>
-          <View style={styles.placeholder} />
-        </View>
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
+        <View style={styles.sheet}>
+          <View style={styles.sheetInner}>
+            <View style={styles.header}>
+              <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button">
+                <Ionicons name="close" size={24} color={DesignColors.black} />
+              </Pressable>
+              <Text style={styles.title}>{title}</Text>
+              <View style={styles.placeholder} />
+            </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Biological sex</Text>
-            <View style={styles.row}>
-              <TouchableOpacity
-                style={[styles.choice, sex === 'male' && styles.choiceActive]}
-                onPress={() => setSex('male')}
-                activeOpacity={0.85}>
-                <Text style={[styles.choiceText, sex === 'male' && styles.choiceTextActive]}>Male</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.choice, sex === 'female' && styles.choiceActive]}
-                onPress={() => setSex('female')}
-                activeOpacity={0.85}>
-                <Text style={[styles.choiceText, sex === 'female' && styles.choiceTextActive]}>Female</Text>
-              </TouchableOpacity>
+            <ScrollView
+              style={styles.scrollView}
+              contentContainerStyle={styles.content}
+              showsVerticalScrollIndicator={false}>
+              {showSex ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Biological sex</Text>
+                  <View style={styles.row}>
+                    <TouchableOpacity
+                      style={[styles.choice, sex === 'male' && styles.choiceActive]}
+                      onPress={() => setSex('male')}
+                      activeOpacity={0.85}>
+                      <Text style={[styles.choiceText, sex === 'male' && styles.choiceTextActive]}>Male</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.choice, sex === 'female' && styles.choiceActive]}
+                      onPress={() => setSex('female')}
+                      activeOpacity={0.85}>
+                      <Text style={[styles.choiceText, sex === 'female' && styles.choiceTextActive]}>Female</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : null}
+
+              {showActivity ? (
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Activity level</Text>
+                  <View style={styles.list}>
+                    {ACTIVITY_OPTIONS.map((option) => {
+                      const selected = option.value === activityLevel;
+                      return (
+                        <TouchableOpacity
+                          key={option.value}
+                          style={[styles.activityRow, selected && styles.activityRowActive]}
+                          onPress={() => setActivityLevel(option.value)}
+                          activeOpacity={0.85}>
+                          <View style={styles.activityCopy}>
+                            <Text style={styles.activityTitle}>{option.title}</Text>
+                            <Text style={styles.activitySubtitle}>{option.subtitle}</Text>
+                          </View>
+                          {selected ? (
+                            <Ionicons name="checkmark-circle" size={22} color={DesignColors.primary} />
+                          ) : (
+                            <Ionicons name="ellipse-outline" size={22} color={DesignColors.gray300} />
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
+
+            <View style={styles.buttonContainer}>
+              <Pressable
+                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                onPress={handleSave}
+                disabled={isSaving}
+                accessibilityRole="button">
+                <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save'}</Text>
+              </Pressable>
             </View>
           </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Activity level</Text>
-            <View style={styles.list}>
-              {ACTIVITY_OPTIONS.map((option) => {
-                const selected = option.value === activityLevel;
-                return (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[styles.activityRow, selected && styles.activityRowActive]}
-                    onPress={() => setActivityLevel(option.value)}
-                    activeOpacity={0.85}>
-                    <View style={styles.activityCopy}>
-                      <Text style={styles.activityTitle}>{option.title}</Text>
-                      <Text style={styles.activitySubtitle}>{option.subtitle}</Text>
-                    </View>
-                    {selected ? (
-                      <Ionicons name="checkmark-circle" size={22} color={DesignColors.primary} />
-                    ) : (
-                      <Ionicons name="ellipse-outline" size={22} color={DesignColors.gray300} />
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-        </ScrollView>
-
-        <View style={styles.buttonContainer}>
-          <Pressable
-            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={isSaving}
-            accessibilityRole="button">
-            <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save'}</Text>
-          </Pressable>
         </View>
       </View>
     </Modal>
@@ -142,9 +168,25 @@ export function SexActivityModal({
 }
 
 const styles = StyleSheet.create({
-  container: {
+  modalRoot: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+  },
+  sheet: {
+    height: '75%',
+    maxHeight: '85%',
+    minHeight: 420,
     backgroundColor: DesignColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  sheetInner: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

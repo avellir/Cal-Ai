@@ -22,6 +22,7 @@ export function Chip({ label, selected = false, onPress, style }: ChipProps) {
           backgroundColor: selected ? DesignColors.primaryBg : DesignColors.white,
           borderColor: selected ? DesignColors.primary : DesignColors.gray200,
           opacity: pressed ? 0.9 : 1,
+          transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,
       ]}>
@@ -40,7 +41,7 @@ const styles = StyleSheet.create({
   base: {
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.full,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
   },
 });

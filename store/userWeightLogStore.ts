@@ -3,14 +3,16 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
 import type { UserWeightEntry } from '@/lib/user-weight-entries-types';
-import { addUserWeightEntry, getLatestUserWeightEntry } from '@/services/userWeightEntries';
+import { addUserWeightEntry, getLatestUserWeightEntry, getUserWeightEntries } from '@/services/userWeightEntries';
 
 type UserWeightLogStore = {
   latest: UserWeightEntry | null;
+  history: UserWeightEntry[];
   isLoading: boolean;
   error: string | null;
 
   fetchLatest: (userId: string) => Promise<void>;
+  fetchRange: (userId: string, start: Date, end: Date) => Promise<void>;
   addToday: (userId: string, weightKg: number) => Promise<boolean>;
   clear: () => void;
 };
@@ -19,6 +21,7 @@ export const useUserWeightLogStore = create<UserWeightLogStore>()(
   persist(
     (set) => ({
       latest: null,
+      history: [],
       isLoading: false,
       error: null,
 
@@ -37,6 +40,24 @@ export const useUserWeightLogStore = create<UserWeightLogStore>()(
         } catch (err) {
           console.error('Unexpected error in fetchLatest:', err);
           set({ error: 'Failed to load weight. Please try again.', isLoading: false });
+        }
+      },
+
+      fetchRange: async (userId: string, start: Date, end: Date) => {
+        set({ isLoading: true, error: null });
+
+        try {
+          const { data, error } = await getUserWeightEntries(userId, start, end);
+
+          if (error) {
+            set({ error, isLoading: false });
+            return;
+          }
+
+          set({ history: data ?? [], isLoading: false, error: null });
+        } catch (err) {
+          console.error('Unexpected error in fetchRange:', err);
+          set({ error: 'Failed to load weight history. Please try again.', isLoading: false });
         }
       },
 
@@ -60,7 +81,7 @@ export const useUserWeightLogStore = create<UserWeightLogStore>()(
         }
       },
 
-      clear: () => set({ latest: null, isLoading: false, error: null }),
+      clear: () => set({ latest: null, history: [], isLoading: false, error: null }),
     }),
     {
       name: 'user-weight-log-storage',
@@ -69,4 +90,3 @@ export const useUserWeightLogStore = create<UserWeightLogStore>()(
     }
   )
 );
-

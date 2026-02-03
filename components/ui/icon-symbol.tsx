@@ -17,10 +17,13 @@ type Props = {
 
 const FALLBACK_ICON_MAP: Record<string, keyof typeof Ionicons.glyphMap> = {
   'house.fill': 'home',
+  house: 'home-outline',
   'paperplane.fill': 'paper-plane',
   'chevron.left.forwardslash.chevron.right': 'code-slash',
   'chart.bar.fill': 'stats-chart',
+  'chart.bar': 'stats-chart-outline',
   'gearshape.fill': 'settings-sharp',
+  gearshape: 'settings-outline',
 };
 
 export function IconSymbol({ name, size = 24, color = DesignColors.black, style }: Props) {

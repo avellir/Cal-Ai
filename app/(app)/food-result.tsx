@@ -256,7 +256,6 @@ const micronutrients: MicronutrientData = useMemo(() => (
       value: scaled.protein,
       percent: macroPercentages.protein,
       color: DesignColors.protein,
-      bg: '#FFE8EC',
       Icon: Fish,
     },
     {
@@ -265,7 +264,6 @@ const micronutrients: MicronutrientData = useMemo(() => (
       value: scaled.carbs,
       percent: macroPercentages.carbs,
       color: DesignColors.carbs,
-      bg: '#FFF4D5',
       Icon: Leaf,
     },
     {
@@ -274,7 +272,6 @@ const micronutrients: MicronutrientData = useMemo(() => (
       value: scaled.fat,
       percent: macroPercentages.fat,
       color: DesignColors.fat,
-      bg: '#E8F1FF',
       Icon: Droplet,
     },
   ];
@@ -423,7 +420,6 @@ const micronutrients: MicronutrientData = useMemo(() => (
                 value={macro.value}
                 percent={macro.percent}
                 color={macro.color}
-                iconBg={macro.bg}
                 Icon={macro.Icon}
               />
             ))}

@@ -85,65 +85,86 @@ export function WeightEntryModal({
     <Modal
       visible={visible}
       animationType="slide"
-      presentationStyle="pageSheet"
+      transparent
       onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <TouchableWithoutFeedback onPress={dismissKeyboard}>
-          <View style={styles.container}>
-            <View style={styles.header}>
-              <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button">
-                <Ionicons name="close" size={24} color={DesignColors.black} />
-              </Pressable>
-              <Text style={styles.title}>Current Weight</Text>
-              <View style={styles.placeholder} />
-            </View>
-
-            <ScrollView
-              style={styles.scrollView}
-              contentContainerStyle={styles.content}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}>
-              <Text style={styles.prompt}>{prompt}</Text>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Weight (kg)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={weightText}
-                  onChangeText={setWeightText}
-                  placeholder="e.g. 75"
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  onSubmitEditing={dismissKeyboard}
-                />
-                <Text style={styles.helper}>
-                  This adds a new entry to your weight log (it won’t overwrite past values).
-                </Text>
+      <View style={styles.modalRoot}>
+        <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button" />
+        <KeyboardAvoidingView
+          style={styles.sheet}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <TouchableWithoutFeedback onPress={dismissKeyboard}>
+            <View style={styles.sheetInner}>
+              <View style={styles.header}>
+                <Pressable onPress={onClose} style={styles.closeButton} accessibilityRole="button">
+                  <Ionicons name="close" size={24} color={DesignColors.black} />
+                </Pressable>
+                <Text style={styles.title}>Current Weight</Text>
+                <View style={styles.placeholder} />
               </View>
-            </ScrollView>
 
-            <View style={styles.buttonContainer}>
-              <Pressable
-                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={isSaving}
-                accessibilityRole="button">
-                <Text style={styles.saveButtonText}>{isSaving ? 'Saving…' : 'Save today’s weight'}</Text>
-              </Pressable>
+              <ScrollView
+                style={styles.scrollView}
+                contentContainerStyle={styles.content}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}>
+                <Text style={styles.prompt}>{prompt}</Text>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Weight (kg)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={weightText}
+                    onChangeText={setWeightText}
+                    placeholder="e.g. 75"
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    onSubmitEditing={dismissKeyboard}
+                  />
+                  <Text style={styles.helper}>
+                    This adds a new entry to your weight log (it won’t overwrite past values).
+                  </Text>
+                </View>
+              </ScrollView>
+
+              <View style={styles.buttonContainer}>
+                <Pressable
+                  style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+                  onPress={handleSave}
+                  disabled={isSaving}
+                  accessibilityRole="button">
+                  <Text style={styles.saveButtonText}>
+                    {isSaving ? 'Saving…' : 'Save today’s weight'}
+                  </Text>
+                </Pressable>
+              </View>
             </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  modalRoot: {
     flex: 1,
+    justifyContent: 'flex-end',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(17, 24, 39, 0.45)',
+  },
+  sheet: {
+    height: '55%',
+    maxHeight: '85%',
+    minHeight: 360,
     backgroundColor: DesignColors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  sheetInner: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

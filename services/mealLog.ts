@@ -1,6 +1,6 @@
 import type { AddMealInput, MealLogEntry, MealType } from '@/lib/meal-log-types';
 import { supabase } from '@/lib/supabase';
-import { deleteMealPhoto, uploadMealPhoto } from './mealPhotoStorage';
+import { deleteMealPhoto, getSignedPhotoUrl, uploadMealPhoto } from './mealPhotoStorage';
 
 type MealEntryRow = {
   id: string;
@@ -135,7 +135,25 @@ export async function fetchLoggedMeals(userId: string): Promise<MealLogEntry[]> 
     throw error;
   }
 
-  return (data ?? []).map((row) => mapMealRowToEntry(row as unknown as MealRow));
+  const mappedMeals = (data ?? []).map((row) => mapMealRowToEntry(row as unknown as MealRow));
+  return Promise.all(
+    mappedMeals.map(async (meal) => {
+      if (!meal.imageUrl) {
+        return meal;
+      }
+
+      const path = extractStoragePath(meal.imageUrl);
+      if (!path) {
+        return meal;
+      }
+
+      const signedUrl = await getSignedPhotoUrl(path);
+      return {
+        ...meal,
+        imageUrl: signedUrl ?? meal.imageUrl,
+      };
+    })
+  );
 }
 
 export async function logMeal(userId: string, input: AddMealInput): Promise<MealLogEntry> {
@@ -210,11 +228,15 @@ export async function logMeal(userId: string, input: AddMealInput): Promise<Meal
     try {
       const uploadResult = await uploadMealPhoto(profileId, meal.id, input.imageUri);
       
-      if (uploadResult.success && uploadResult.url) {
-        imageUrl = uploadResult.url;
+      if (uploadResult.success && uploadResult.path) {
+        const imagePath = uploadResult.path;
         
-        // Update meal record with image URL (Requirement 1.2)
-        await updateMealImageUrl(meal.id, imageUrl);
+        // Store storage path for signed URL resolution (private bucket)
+        await updateMealImageUrl(meal.id, imagePath);
+
+        // Generate a signed URL for immediate display if needed
+        const signedUrl = await getSignedPhotoUrl(imagePath);
+        imageUrl = signedUrl ?? null;
       } else {
         // Requirement 1.3: Log error but don't block meal creation
         console.warn('Image upload failed, preserving local URI:', uploadResult.error);
@@ -324,8 +346,27 @@ function mapMealRowToEntry(row: MealRow): MealLogEntry {
     macros,
     note: row.notes ?? firstFood?.serving_unit ?? null,
     imageUri: null,
-    imageUrl: row.image_url ?? null,  // Map image_url to imageUrl (Requirement 5.3)
+    imageUrl: row.image_url ?? null,  // Stored as path or URL
     timestamp,
     mealType: (row.meal_type ?? DEFAULT_MEAL_TYPE) as MealType,
   };
+}
+
+function extractStoragePath(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  if (!trimmed.startsWith('http')) {
+    return trimmed;
+  }
+
+  const marker = '/meal-photos/';
+  const index = trimmed.indexOf(marker);
+  if (index === -1) {
+    return null;
+  }
+
+  const pathWithQuery = trimmed.slice(index + marker.length);
+  const path = pathWithQuery.split('?')[0];
+  return path ? decodeURIComponent(path) : null;
 }

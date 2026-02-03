@@ -7,7 +7,8 @@
  * 3. Nutritional Lookup (FatSecret/USDA)
  * 4. Validation and Aggregation
  * 
- * Optimized for free-tier API usage: 1 API call per image (vs 2-4 previously)
+ * Optimized for free-tier API usage: 1 API call per image,
+ * with an optional layered-dish refinement pass when needed.
  */
 
 import {
@@ -52,6 +53,10 @@ RULES:
 - Use conservative weight estimates (grams)
 - DO NOT infer hidden ingredients (oils, butter, salt) unless visually evident
 - Include structural components (bun, crust, bread) even if partially hidden
+- For layered foods (pizza, toast, flatbreads), list the base (dough/crust/bread) AND each visible topping as separate ingredients
+- Ensure visible meats, cheeses, and greens are listed as distinct ingredients when present
+- If a protein is visible but its exact type is unclear, use a generic label (e.g., "meat", "shredded meat", "deli meat")
+- Include visible garnishes like herbs or citrus (e.g., cilantro, parsley, basil, lime, lemon) as separate ingredients
 - Keep descriptions SHORT (1-3 words max)
 - Limit to MAX 10 ingredients per region
 
@@ -77,6 +82,29 @@ OUTPUT FORMAT:
 }
 
 If no food detected, return empty regions array.`;
+
+/**
+ * Layered-dish refinement prompt (pizza/flatbread/toast)
+ * Used only when the combined analysis collapses toppings into a single ingredient.
+ */
+const LAYERED_TOPPINGS_PROMPT = (dishLabel: string) => `Analyze this image and focus ONLY on the ${dishLabel}.
+It is a layered food (pizza/flatbread/toast). List the base (crust/dough/bread) AND each visible topping as separate ingredients.
+Do NOT return a generic ingredient like "pizza", "flatbread", or "toast".
+Include visible meats, cheeses, and greens as distinct items when present (e.g., prosciutto, arugula, parmesan).
+If a topping is visible but you are unsure of the exact name, use a generic label like "meat topping" or "leafy greens".
+If a protein is visible but its exact type is unclear, use a generic label (e.g., "meat topping").
+Include visible garnishes like herbs or citrus (e.g., basil, parsley, arugula, lemon, lime) as separate ingredients.
+Do NOT infer hidden ingredients (oils, butter, salt) unless visually evident.
+Use conservative weight estimates in grams.
+
+Return JSON:
+{
+  "ingredients": [
+    {"name":"ingredient","weight_grams":100,"confidence":80,"visual_evidence":"visible"}
+  ]
+}
+
+If you cannot see toppings, return an empty ingredients array.`;
 
 
 // ============================================================================
@@ -108,6 +136,7 @@ type CombinedAnalysisResult = {
 };
 
 const DEFAULT_GEMINI_TEMPERATURE = 0.1;
+const LAYERED_REFINEMENT_TEMPERATURE = 0.2;
 
 const BEVERAGE_KEYWORDS = [
     'juice',
@@ -123,9 +152,52 @@ const BEVERAGE_KEYWORDS = [
     'cocktail',
 ];
 
+const LAYERED_DISH_KEYWORDS = [
+    'pizza',
+    'flatbread',
+    'toast',
+];
+
+const GARNISH_KEYWORDS = [
+    'cilantro',
+    'parsley',
+    'basil',
+    'mint',
+    'chives',
+    'dill',
+    'lime',
+    'lemon',
+    'scallion',
+    'green onion',
+    'microgreens',
+    'herb',
+];
+
 function isBeverageIngredient(name: string): boolean {
     const nameLower = name.toLowerCase();
     return BEVERAGE_KEYWORDS.some(keyword => nameLower.includes(keyword));
+}
+
+function isGarnishIngredient(name: string): boolean {
+    const nameLower = name.toLowerCase();
+    return GARNISH_KEYWORDS.some(keyword => nameLower.includes(keyword));
+}
+
+function isLayeredDishRegion(description?: string, dishName?: string): boolean {
+    const text = `${description ?? ''} ${dishName ?? ''}`.toLowerCase();
+    return LAYERED_DISH_KEYWORDS.some(keyword => text.includes(keyword));
+}
+
+function hasLayeredIngredient(ingredients: GeminiIngredient[] | undefined): boolean {
+    if (!ingredients) return false;
+    return ingredients.some(ing =>
+        LAYERED_DISH_KEYWORDS.some(keyword => ing.name.toLowerCase().includes(keyword))
+    );
+}
+
+function isGenericLayeredName(name: string): boolean {
+    const lower = name.toLowerCase().trim();
+    return LAYERED_DISH_KEYWORDS.some(keyword => lower === keyword);
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -212,14 +284,49 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             return extractNutritionFromLabel(imageBase64);
         }
 
+        // 2.1 Optional layered-dish refinement (pizza/flatbread/toast)
+        const layeredCandidateIndex = combinedResult.regions.findIndex(region =>
+            (isLayeredDishRegion(region.description, region.dishName) || hasLayeredIngredient(region.ingredients)) &&
+            (region.ingredients?.length ?? 0) <= 2
+        );
+        if (layeredCandidateIndex >= 0) {
+            stagesCompleted.push('layered_refine');
+            const region = combinedResult.regions[layeredCandidateIndex];
+            const dishLabel = region.dishName || region.description || 'layered dish';
+            const refinedIngredients = await withErrorHandling(
+                async () => refineLayeredDishIngredients(apiKey, imageBase64, dishLabel),
+                { stage: 'layered_refine' }
+            );
+
+            const sanitizedRefined = refinedIngredients.filter(ing => !isGenericLayeredName(ing.name));
+
+            if (sanitizedRefined.length >= 2) {
+                combinedResult.regions[layeredCandidateIndex] = {
+                    ...region,
+                    ingredients: sanitizedRefined
+                };
+                warnings.push('Layered dish refinement applied to improve topping extraction.');
+            } else {
+                warnings.push('Layered dish refinement attempted but toppings were not reliably detected.');
+            }
+        }
+
         // 3. Extract flattened ingredients from combined result
         stagesCompleted.push('ingredient_extraction');
         const rawIngredients = combinedResult.regions.flatMap(r => r.ingredients || []);
         
         // 3.1 Filter out low-confidence ingredients (confidence < 40 per new prompt rules)
         const MIN_INGREDIENT_CONFIDENCE = 40;
+        const GARNISH_CONFIDENCE_THRESHOLD = 30;
         const flattenedIngredients = rawIngredients.filter(ing => {
             if (ing.confidence < MIN_INGREDIENT_CONFIDENCE) {
+                if (isGarnishIngredient(ing.name) && ing.confidence >= GARNISH_CONFIDENCE_THRESHOLD) {
+                    console.log(
+                        `🌿 Keeping low-confidence garnish: "${ing.name}" ` +
+                        `(confidence: ${ing.confidence}%, garnish threshold: ${GARNISH_CONFIDENCE_THRESHOLD}%)`
+                    );
+                    return true;
+                }
                 console.log(
                     `🚫 Filtered out low-confidence ingredient: "${ing.name}" ` +
                     `(confidence: ${ing.confidence}%, threshold: ${MIN_INGREDIENT_CONFIDENCE}%)`
@@ -499,17 +606,60 @@ function attemptJsonRepair(jsonStr: string): string {
 }
 
 /**
+ * Refines ingredients for layered dishes (pizza/flatbread/toast) using a targeted prompt.
+ * Returns a list of ingredients or an empty list if extraction fails.
+ */
+async function refineLayeredDishIngredients(
+    apiKey: string,
+    base64Image: string,
+    dishLabel: string
+): Promise<GeminiIngredient[]> {
+    const response = await runGeminiRequest({
+        apiKey,
+        prompt: LAYERED_TOPPINGS_PROMPT(dishLabel),
+        base64Image,
+        temperature: LAYERED_REFINEMENT_TEMPERATURE,
+        maxOutputTokens: 2048,
+        responseSchema: {
+            type: "object",
+            properties: {
+                ingredients: {
+                    type: "array",
+                    minItems: 2,
+                    items: {
+                        type: "object",
+                        properties: {
+                            name: { type: "string" },
+                            weight_grams: { type: "number" },
+                            confidence: { type: "number" },
+                            visual_evidence: { type: "string" }
+                        },
+                        required: ["name", "weight_grams", "confidence"]
+                    }
+                }
+            },
+            required: ["ingredients"]
+        }
+    });
+
+    try {
+        const parsed = JSON.parse(response) as { ingredients?: GeminiIngredient[] };
+        if (!parsed.ingredients || !Array.isArray(parsed.ingredients)) {
+            return [];
+        }
+        return parsed.ingredients;
+    } catch (error) {
+        console.warn('[LayeredRefine] Failed to parse refinement response:', error);
+        return [];
+    }
+}
+
+/**
  * Performs combined segmentation and decomposition in a SINGLE API call
  * This reduces API usage by 50-75% compared to separate calls
  */
 async function performCombinedAnalysis(apiKey: string, base64Image: string): Promise<CombinedAnalysisResult> {
-    const temperatureRaw =
-        process.env.EXPO_PUBLIC_GEMINI_TEMPERATURE ??
-        process.env.GOOGLE_GEMINI_TEMPERATURE;
-    const parsedTemperature = temperatureRaw !== undefined ? Number(temperatureRaw) : NaN;
-    const temperature = Number.isFinite(parsedTemperature)
-        ? clamp(parsedTemperature, 0, 1)
-        : DEFAULT_GEMINI_TEMPERATURE;
+    const temperature = DEFAULT_GEMINI_TEMPERATURE;
 
     const response = await runGeminiRequest({
         apiKey,

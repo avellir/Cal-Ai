@@ -183,7 +183,7 @@ export async function runGeminiRequest(params: GeminiRequest): Promise<string> {
             apiKey,
             prompt,
             base64Image,
-            model = 'gemini-2.5-flash-lite', // Updated to 2.5-flash-lite (released July 2025)
+            model = 'gemini-flash-latest',
             temperature = 0.4,
             responseSchema,
             maxOutputTokens = 2048

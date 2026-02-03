@@ -14,7 +14,7 @@ export function HapticTab(props: BottomTabBarButtonProps) {
         typeof style === 'function'
           ? (style as (state: PressableStateCallbackType) => StyleProp<ViewStyle>)(state)
           : (style as StyleProp<ViewStyle>),
-        state.pressed ? { opacity: 0.7 } : null,
+        state.pressed ? { opacity: 0.9, transform: [{ scale: 0.98 }] } : null,
       ]}
       onPress={(event) => {
         Haptics.selectionAsync().catch(() => {

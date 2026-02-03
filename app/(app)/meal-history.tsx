@@ -13,6 +13,7 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 import { DesignColors, Typography } from '@/constants/theme';
 import { resolveImageUri, useMealLogStore } from '@/lib/meal-log-store';
@@ -192,96 +193,98 @@ export default function MealHistoryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn}>
-          <Feather name="arrow-left" size={24} color={DesignColors.black} />
-        </Pressable>
-        <Text style={styles.title}>Meal History</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <Feather name="search" size={18} color={DesignColors.gray400} />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search meals..."
-          placeholderTextColor={DesignColors.gray400}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-        {searchQuery.length > 0 && (
-          <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-            <Feather name="x" size={18} color={DesignColors.gray400} />
+      <Animated.View style={styles.screen} entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable onPress={() => router.back()} style={styles.backBtn}>
+            <Feather name="arrow-left" size={24} color={DesignColors.black} />
           </Pressable>
-        )}
-      </View>
+          <Text style={styles.title}>Meal History</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-      {/* Filters */}
-      <View style={styles.filtersWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filtersContainer}>
-          {FILTER_OPTIONS.map((option) => (
-            <Pressable
-              key={option.value}
-              style={[
-                styles.filterChip,
-                activeFilter === option.value && styles.filterChipActive,
-              ]}
-              onPress={() => setActiveFilter(option.value)}>
-              <Text
-                style={[
-                  styles.filterChipText,
-                  activeFilter === option.value && styles.filterChipTextActive,
-                ]}>
-                {option.label}
-              </Text>
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <Feather name="search" size={18} color={DesignColors.gray400} />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search meals..."
+            placeholderTextColor={DesignColors.gray400}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+              <Feather name="x" size={18} color={DesignColors.gray400} />
             </Pressable>
-          ))}
-        </ScrollView>
-      </View>
+          )}
+        </View>
 
-      {/* Meals List */}
-      <ScrollView
-        style={styles.listContainer}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}>
-        {isLoading ? (
-          <View style={styles.emptyState}>
-            <ActivityIndicator size="large" color={DesignColors.primary} />
-            <Text style={styles.emptyText}>Loading meals...</Text>
-          </View>
-        ) : groupedMeals.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Feather name="inbox" size={48} color={DesignColors.gray300} />
-            <Text style={styles.emptyTitle}>No meals found</Text>
-            <Text style={styles.emptyText}>
-              {searchQuery || activeFilter !== 'all'
-                ? 'Try adjusting your search or filters'
-                : 'Start logging meals to see them here'}
-            </Text>
-          </View>
-        ) : (
-          groupedMeals.map(([date, dateMeals]) => (
-            <View key={date} style={styles.dateGroup}>
-              <Text style={styles.dateHeader}>{date}</Text>
-              {dateMeals.map((meal) => (
-                <MealCard
-                  key={meal.id}
-                  meal={meal}
-                  onDelete={() => handleDelete(meal.id)}
-                  isDeleting={deletingId === meal.id}
-                />
-              ))}
+        {/* Filters */}
+        <View style={styles.filtersWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filtersContainer}>
+            {FILTER_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                style={[
+                  styles.filterChip,
+                  activeFilter === option.value && styles.filterChipActive,
+                ]}
+                onPress={() => setActiveFilter(option.value)}>
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    activeFilter === option.value && styles.filterChipTextActive,
+                  ]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* Meals List */}
+        <ScrollView
+          style={styles.listContainer}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}>
+          {isLoading ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color={DesignColors.primary} />
+              <Text style={styles.emptyText}>Loading meals...</Text>
             </View>
-          ))
-        )}
-      </ScrollView>
+          ) : groupedMeals.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Feather name="inbox" size={48} color={DesignColors.gray300} />
+              <Text style={styles.emptyTitle}>No meals found</Text>
+              <Text style={styles.emptyText}>
+                {searchQuery || activeFilter !== 'all'
+                  ? 'Try adjusting your search or filters'
+                  : 'Start logging meals to see them here'}
+              </Text>
+            </View>
+          ) : (
+            groupedMeals.map(([date, dateMeals]) => (
+              <View key={date} style={styles.dateGroup}>
+                <Text style={styles.dateHeader}>{date}</Text>
+                {dateMeals.map((meal) => (
+                  <MealCard
+                    key={meal.id}
+                    meal={meal}
+                    onDelete={() => handleDelete(meal.id)}
+                    isDeleting={deletingId === meal.id}
+                  />
+                ))}
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 }
@@ -291,6 +294,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DesignColors.background,
+  },
+  screen: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

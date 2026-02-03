@@ -80,3 +80,29 @@ export async function addUserWeightEntry(
   }
 }
 
+export async function getUserWeightEntries(
+  userId: string,
+  start: Date,
+  end: Date
+): Promise<ServiceResponse<UserWeightEntry[]>> {
+  try {
+    const { data, error } = await supabase
+      .from('user_weight_entries')
+      .select('*')
+      .eq('user_id', userId)
+      .gte('recorded_at', start.toISOString())
+      .lte('recorded_at', end.toISOString())
+      .order('recorded_at', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching weight entries:', error);
+      return { data: null, error: 'Failed to load weight history. Please try again.' };
+    }
+
+    const rows = (data as UserWeightEntryRow[] | null) ?? [];
+    return { data: rows.map(rowToUserWeightEntry), error: null };
+  } catch (err) {
+    console.error('Unexpected error fetching weight entries:', err);
+    return { data: null, error: 'An unexpected error occurred. Please check your connection.' };
+  }
+}

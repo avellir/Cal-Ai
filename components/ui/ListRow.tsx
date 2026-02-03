@@ -1,11 +1,15 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type TextProps, type ViewStyle } from 'react-native';
 
 import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
 
 type ListRowProps = {
   title: string;
   subtitle?: string;
+  titleNumberOfLines?: number;
+  subtitleNumberOfLines?: number;
+  titleEllipsizeMode?: TextProps['ellipsizeMode'];
+  subtitleEllipsizeMode?: TextProps['ellipsizeMode'];
   accessory?: React.ReactNode;
   leftIcon?: React.ReactNode;
   onPress?: () => void;
@@ -16,6 +20,10 @@ type ListRowProps = {
 export function ListRow({
   title,
   subtitle,
+  titleNumberOfLines,
+  subtitleNumberOfLines,
+  titleEllipsizeMode,
+  subtitleEllipsizeMode,
   accessory,
   leftIcon,
   onPress,
@@ -27,8 +35,20 @@ export function ListRow({
       <View style={styles.left}>
         {leftIcon ? <View style={styles.icon}>{leftIcon}</View> : null}
         <View style={styles.copy}>
-          <Text style={styles.title}>{title}</Text>
-          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+          <Text
+            style={styles.title}
+            numberOfLines={titleNumberOfLines}
+            ellipsizeMode={titleEllipsizeMode}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text
+              style={styles.subtitle}
+              numberOfLines={subtitleNumberOfLines}
+              ellipsizeMode={subtitleEllipsizeMode}>
+              {subtitle}
+            </Text>
+          ) : null}
         </View>
       </View>
       {accessory}

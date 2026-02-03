@@ -1,9 +1,10 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Droplet, Fish, Leaf, type LucideIcon } from 'lucide-react-native';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
+    FlatList,
     Image,
     Pressable,
     ScrollView,
@@ -12,26 +13,28 @@ import {
     View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeOut,
+  runOnJS,
+  useAnimatedReaction,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { MacroStatCard } from '@/components/MacroStatCard';
 import { AppBackground } from '@/components/ui/AppBackground';
 import { Card } from '@/components/ui/Card';
 import { ProgressRing } from '@/components/ui/ProgressRing';
+import { Shimmer } from '@/components/ui/Shimmer';
 import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
 import { resolveImageUri, useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
 import { aggregateDailyNutrition } from '@/services/nutritionAggregation';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
-
-const DAYS = [
-  { label: 'T', date: '22', state: 'past' as const },
-  { label: 'W', date: '23', state: 'past' as const },
-  { label: 'T', date: '24', state: 'past' as const },
-  { label: 'F', date: '25', state: 'past' as const },
-  { label: 'S', date: '26', state: 'past' as const },
-  { label: 'S', date: '27', state: 'active' as const },
-  { label: 'M', date: '28', state: 'future' as const },
-];
 
 type MacroKey = 'protein' | 'carbs' | 'fat';
 
@@ -40,7 +43,6 @@ type MacroCardConfig = {
   label: string;
   Icon: LucideIcon;
   iconColor: string;
-  iconBg: string;
 };
 
 const MACRO_CONFIGS: MacroCardConfig[] = [
@@ -49,23 +51,33 @@ const MACRO_CONFIGS: MacroCardConfig[] = [
     label: 'Protein',
     Icon: Fish,
     iconColor: DesignColors.protein,
-    iconBg: '#FFE8EC',
   },
   {
     key: 'carbs',
     label: 'Carbs',
     Icon: Leaf,
     iconColor: DesignColors.carbs,
-    iconBg: '#FFF4D5',
   },
   {
     key: 'fat',
     label: 'Fat',
     Icon: Droplet,
     iconColor: DesignColors.fat,
-    iconBg: '#E8F1FF',
   },
 ];
+
+const DAY_PILL_WIDTH = 56;
+const DAY_PILL_HEIGHT = 64;
+const DAY_PILL_GAP = Spacing.sm;
+
+type DayItem = {
+  date: Date;
+  label: string;
+  day: string;
+  isToday: boolean;
+};
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export default function HomeScreen() {
   const session = useSessionStore((state) => state.session);
@@ -74,7 +86,16 @@ export default function HomeScreen() {
   const mealError = useMealLogStore((state) => state.error);
   const fetchMeals = useMealLogStore((state) => state.fetchMeals);
   const userId = session?.user?.id ?? null;
-  
+
+  const dates = useMemo(() => getRecentDates(7), []);
+  const todayIndex = dates.findIndex((item) => item.isToday);
+  const initialIndex = todayIndex >= 0 ? todayIndex : dates.length - 1;
+  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const listRef = useRef<FlatList<DayItem>>(null);
+  const dayLayouts = useRef<Record<number, { x: number; width: number }>>({});
+  const highlightX = useSharedValue(0);
+  const highlightWidth = useSharedValue(DAY_PILL_WIDTH);
+
   // Get the 2 most recent meals
   const recentMeals = meals.slice(0, 2);
 
@@ -112,9 +133,35 @@ export default function HomeScreen() {
     fat: dailyTargets && dailyTargets.fat > 0 ? Math.min(1, dailyTotals.fat / dailyTargets.fat) : 0,
   };
 
-  const guidanceMessage = hasGoals()
+  const hasGoalsValue = hasGoals();
+
+  const guidanceMessage = hasGoalsValue
     ? null // Will render formatted text inline
     : 'Set your goals to see personalized guidance.';
+
+  const calorieAnim = useSharedValue(0);
+  const [calorieDisplay, setCalorieDisplay] = useState(0);
+
+  const updateHighlight = (index: number) => {
+    const layout = dayLayouts.current[index];
+    if (!layout) return;
+    highlightX.value = withSpring(layout.x, { damping: 18, stiffness: 160 });
+    highlightWidth.value = withSpring(layout.width, { damping: 18, stiffness: 160 });
+  };
+
+  const highlightStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: highlightX.value }],
+    width: highlightWidth.value,
+  }));
+
+  const fabBaseScale = useSharedValue(0.8);
+  const fabPressScale = useSharedValue(1);
+
+  const fabAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: fabBaseScale.value * fabPressScale.value },
+    ],
+  }));
 
   useEffect(() => {
     if (!userId) {
@@ -131,18 +178,44 @@ export default function HomeScreen() {
     });
   }, [userId, fetchMeals, fetchGoals]);
 
+  useEffect(() => {
+    if (!listRef.current) return;
+    listRef.current.scrollToIndex({ index: selectedIndex, animated: true, viewPosition: 0.5 });
+    updateHighlight(selectedIndex);
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    fabBaseScale.value = withSpring(1, { damping: 14, stiffness: 160 });
+  }, [fabBaseScale]);
+
+  useEffect(() => {
+    if (!hasGoalsValue) {
+      setCalorieDisplay(0);
+      return;
+    }
+    calorieAnim.value = 0;
+    calorieAnim.value = withTiming(caloriesRemaining, { duration: 800 });
+  }, [caloriesRemaining, hasGoalsValue, calorieAnim]);
+
+  useAnimatedReaction(
+    () => Math.round(calorieAnim.value),
+    (value, previous) => {
+      if (value === previous) return;
+      runOnJS(setCalorieDisplay)(value);
+    }
+  );
+
   const isInitialLoading = status === 'loading' && meals.length === 0;
 
   return (
-    <SafeAreaView
-      style={styles.safeArea}
-      edges={['top', 'left', 'right']}>
-      <View style={styles.root}>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <Animated.View style={styles.root} entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)}>
         <AppBackground />
-        <ScrollView
+        <Animated.ScrollView
           contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}>
-          <View style={styles.headerRow}>
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}>
+          <Animated.View style={styles.headerRow} entering={FadeInDown.delay(40).duration(260)}>
             <View style={styles.brandRow}>
               <Text style={styles.brandEmoji}>🍎</Text>
               <Text style={styles.brandText}>Cal AI</Text>
@@ -151,40 +224,51 @@ export default function HomeScreen() {
               <Feather name="zap" size={16} color={DesignColors.warning} />
               <Text style={styles.streakValue}>0</Text>
             </View>
+          </Animated.View>
+
+          <View style={styles.dayStripWrapper}>
+            <Animated.View pointerEvents="none" style={[styles.dayPillHighlight, highlightStyle]} />
+            <Animated.FlatList
+              ref={listRef}
+              data={dates}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.date.toISOString()}
+              contentContainerStyle={styles.dayStrip}
+              renderItem={({ item, index }) => (
+                <DatePill
+                  item={item}
+                  index={index}
+                  isSelected={index === selectedIndex}
+                  onSelect={setSelectedIndex}
+                  onLayoutItem={(layout) => {
+                    dayLayouts.current[index] = layout;
+                    if (index === selectedIndex) {
+                      updateHighlight(index);
+                    }
+                  }}
+                />
+              )}
+              getItemLayout={(_, index) => ({
+                length: DAY_PILL_WIDTH + DAY_PILL_GAP,
+                offset: (DAY_PILL_WIDTH + DAY_PILL_GAP) * index,
+                index,
+              })}
+              onScrollToIndexFailed={({ index }) => {
+                setTimeout(() => {
+                  listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.5 });
+                }, 100);
+              }}
+            />
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.dayStrip}>
-            {DAYS.map((day) => {
-              const isActive = day.state === 'active';
-              const isFuture = day.state === 'future';
-              return (
-                <Pressable
-                  key={`${day.label}-${day.date}`}
-                  style={[
-                    styles.dayPill,
-                    isActive && styles.dayPillActive,
-                    isFuture && styles.dayPillFuture,
-                  ]}>
-                  <Text style={[styles.dayPillLabel, isActive && styles.dayPillLabelActive, isFuture && styles.dayPillLabelFuture]}>
-                    {day.label}
-                  </Text>
-                  <Text style={[styles.dayPillNumber, isActive && styles.dayPillNumberActive, isFuture && styles.dayPillNumberFuture]}>
-                    {day.date}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          <Card elevation="md" style={styles.calorieCard}>
+          <Animated.View entering={FadeInDown.delay(80).duration(260)}>
+            <Card elevation="md" style={styles.calorieCard}>
             <View style={styles.calorieCopy}>
-              {hasGoals() ? (
+              {hasGoalsValue ? (
                 <>
                   <Text style={styles.overline}>Today</Text>
-                  <Text style={styles.calorieValue}>{Math.round(caloriesRemaining)}</Text>
+                  <Text style={styles.calorieValue}>{calorieDisplay}</Text>
                   <Text style={styles.calorieLabel}>Calories left</Text>
                 </>
               ) : (
@@ -197,30 +281,31 @@ export default function HomeScreen() {
             </View>
             <View style={styles.ringWrapper}>
               <ProgressRing
-                value={hasGoals() ? percentageConsumed : 0}
+                value={hasGoalsValue ? percentageConsumed : 0}
                 size={120}
-                strokeWidth={10}
-                color={DesignColors.primary}
-                backgroundColor={DesignColors.gray200}>
+                strokeWidth={14}
+                gradientColors={DesignColors.calorieRing}
+                backgroundColor={DesignColors.backgroundTertiary}>
                 <View style={styles.ringContent}>
-                  <Text style={styles.ringPercent}>{hasGoals() ? `${percentageConsumed}%` : ''}</Text>
+                  <Text style={styles.ringPercent}>{hasGoalsValue ? `${percentageConsumed}%` : ''}</Text>
                   <Text style={styles.ringUnit}>of goal</Text>
                 </View>
               </ProgressRing>
             </View>
-          </Card>
+            </Card>
+          </Animated.View>
 
           <Text style={styles.guidanceText}>
-            {hasGoals()
+            {hasGoalsValue
               ? `You are on track with ${Math.round(caloriesRemaining)} calories remaining.`
               : 'Set your goals to see personalized guidance.'}
           </Text>
 
-          <View style={styles.macroRow}>
+          <Animated.View style={styles.macroRow}>
             {MACRO_CONFIGS.map((config, index) => {
               let value = '0g';
               let progressValue = 0;
-              if (hasGoals()) {
+              if (hasGoalsValue) {
                 if (config.key === 'protein') {
                   value = `${Math.round(proteinRemaining)}`;
                   progressValue = macroProgress.protein;
@@ -234,20 +319,23 @@ export default function HomeScreen() {
               }
 
               return (
-                <MacroStatCard
+                <Animated.View
                   key={config.label}
-                  label={config.label}
-                  value={Number.parseFloat(value) || 0}
-                  percent={progressValue * 100}
-                  color={config.iconColor}
-                  iconBg={config.iconBg}
-                  Icon={config.Icon}
-                />
-              );
-            })}
-          </View>
+                  entering={FadeInDown.delay(140 + index * 100).duration(260)}
+                  style={styles.macroCardWrapper}>
+                  <MacroStatCard
+                    label={config.label}
+                    value={Number.parseFloat(value) || 0}
+                    percent={progressValue * 100}
+                    color={config.iconColor}
+                    Icon={config.Icon}
+                  />
+                </Animated.View>
+                );
+              })}
+          </Animated.View>
 
-          <View style={styles.recentSection}>
+          <Animated.View style={styles.recentSection} entering={FadeInDown.delay(200).duration(260)}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Recently logged</Text>
               {meals.length > 0 && (
@@ -268,19 +356,16 @@ export default function HomeScreen() {
               </View>
             ) : recentMeals.length > 0 ? (
               <View style={styles.recentMealsList}>
-                {recentMeals.map((meal) => {
+                {recentMeals.map((meal, index) => {
                   // Resolve image URI with cache-first logic (Requirements 2.2, 2.3)
                   const resolvedImageUri = resolveImageUri(meal.imageUri, meal.imageUrl);
                   return (
-                  <View key={meal.id} style={styles.recentCard}>
+                  <Animated.View
+                    key={meal.id}
+                    entering={FadeInDown.delay(200 + index * 60).duration(240)}
+                    style={styles.recentCard}>
                     <View style={styles.recentRow}>
-                      {resolvedImageUri ? (
-                        <Image source={{ uri: resolvedImageUri }} style={styles.recentImage} />
-                      ) : (
-                        <View style={styles.recentImagePlaceholder}>
-                          <Text style={styles.recentImageEmoji}>🍽️</Text>
-                        </View>
-                      )}
+                      <MealImage uri={resolvedImageUri} />
                       <View style={styles.recentContent}>
                         <View style={styles.recentHeader}>
                           <Text style={styles.recentHeadline} numberOfLines={1}>{meal.name}</Text>
@@ -297,7 +382,7 @@ export default function HomeScreen() {
                         </View>
                       </View>
                     </View>
-                  </View>
+                  </Animated.View>
                   );
                 })}
               </View>
@@ -309,19 +394,91 @@ export default function HomeScreen() {
                 </Text>
               </View>
             )}
-          </View>
-        </ScrollView>
+          </Animated.View>
+        </Animated.ScrollView>
 
-        <Pressable
+        <AnimatedPressable
           accessibilityRole="button"
           accessibilityLabel="Add a new entry"
-          style={styles.fab}
-          onPress={() => router.push('/(app)/camera')}>
+          style={[styles.fab, fabAnimatedStyle]}
+          onPress={() => router.push('/(app)/camera')}
+          onPressIn={() => {
+            fabPressScale.value = withSpring(0.95, { damping: 16, stiffness: 180 });
+          }}
+          onPressOut={() => {
+            fabPressScale.value = withSpring(1, { damping: 16, stiffness: 180 });
+          }}>
           <Feather name="plus" size={24} color={DesignColors.white} />
           <Text style={styles.fabLabel}>Add meal</Text>
-        </Pressable>
-      </View>
+        </AnimatedPressable>
+      </Animated.View>
     </SafeAreaView>
+  );
+}
+
+function DatePill({
+  item,
+  index,
+  isSelected,
+  onSelect,
+  onLayoutItem,
+}: {
+  item: DayItem;
+  index: number;
+  isSelected: boolean;
+  onSelect: (index: number) => void;
+  onLayoutItem: (layout: { x: number; width: number }) => void;
+}) {
+  const scale = useSharedValue(1);
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[styles.dayPillWrapper, animatedStyle]}
+      onLayout={(event) => onLayoutItem(event.nativeEvent.layout)}>
+      <Pressable
+        onPress={() => onSelect(index)}
+        onPressIn={() => {
+          scale.value = withSpring(0.95, { damping: 16, stiffness: 180 });
+        }}
+        onPressOut={() => {
+          scale.value = withSpring(1, { damping: 16, stiffness: 180 });
+        }}
+        style={[styles.dayPill, isSelected && styles.dayPillActive]}>
+        <Text style={[styles.dayPillLabel, isSelected && styles.dayPillLabelActive]}>
+          {item.label}
+        </Text>
+        <Text style={[styles.dayPillNumber, isSelected && styles.dayPillNumberActive]}>
+          {item.day}
+        </Text>
+        {item.isToday ? <View style={styles.todayDot} /> : null}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+function MealImage({ uri }: { uri?: string | null }) {
+  const [loaded, setLoaded] = useState(false);
+
+  if (!uri) {
+    return (
+      <View style={styles.recentImagePlaceholder}>
+        <Text style={styles.recentImageEmoji}>🍽️</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.recentImageWrapper}>
+      {!loaded ? <Shimmer style={styles.recentImage} /> : null}
+      <Image
+        source={{ uri }}
+        style={[styles.recentImage, !loaded && styles.imageHidden]}
+        onLoadEnd={() => setLoaded(true)}
+      />
+    </View>
   );
 }
 
@@ -374,6 +531,26 @@ function parseMealDescription(text?: string | null): ParsedIngredient[] {
 
       return { name: part, quantity: '' };
     });
+}
+
+function getRecentDates(days: number): DayItem[] {
+  const today = new Date();
+  const items: DayItem[] = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const label = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
+      .format(date)
+      .slice(0, 1)
+      .toUpperCase();
+    items.push({
+      date,
+      label,
+      day: `${date.getDate()}`,
+      isToday: date.toDateString() === today.toDateString(),
+    });
+  }
+  return items;
 }
 
 function IngredientList({ description }: { description?: string | null }) {
@@ -453,21 +630,36 @@ const styles = StyleSheet.create({
     color: DesignColors.warningDark,
     fontWeight: '700',
   },
+  dayStripWrapper: {
+    position: 'relative',
+  },
   dayStrip: {
     gap: Spacing.sm,
     paddingVertical: Spacing.xs,
     paddingHorizontal: Spacing.xs,
   },
+  dayPillHighlight: {
+    position: 'absolute',
+    top: Spacing.xs,
+    left: Spacing.xs,
+    height: DAY_PILL_HEIGHT,
+    borderRadius: BorderRadius.lg,
+    backgroundColor: DesignColors.primaryBg,
+  },
+  dayPillWrapper: {
+    width: DAY_PILL_WIDTH,
+    height: DAY_PILL_HEIGHT,
+    marginRight: DAY_PILL_GAP,
+  },
   dayPill: {
-    width: 56,
-    height: 64,
+    width: '100%',
+    height: '100%',
     borderRadius: BorderRadius.lg,
     borderWidth: 1,
     borderColor: DesignColors.gray200,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: Spacing.sm,
-    backgroundColor: DesignColors.white,
+    backgroundColor: DesignColors.backgroundSecondary,
     shadowColor: DesignColors.black,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.04,
@@ -475,51 +667,60 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   dayPillActive: {
-    borderColor: DesignColors.primary,
-    backgroundColor: DesignColors.primaryBg,
-  },
-  dayPillFuture: {
-    opacity: 0.7,
+    borderColor: 'transparent',
+    backgroundColor: DesignColors.primary900,
+    shadowColor: DesignColors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
   },
   dayPillLabel: {
     ...Typography.caption,
-    color: DesignColors.gray600,
+    color: DesignColors.textSecondary,
   },
   dayPillLabelActive: {
-    color: DesignColors.primaryDark,
-  },
-  dayPillLabelFuture: {
-    color: DesignColors.gray400,
+    color: DesignColors.textInverse,
   },
   dayPillNumber: {
     ...Typography.bodyBold,
-    color: DesignColors.black,
+    color: DesignColors.textPrimary,
   },
   dayPillNumberActive: {
-    color: DesignColors.primaryDark,
+    color: DesignColors.textInverse,
   },
-  dayPillNumberFuture: {
-    color: DesignColors.gray400,
+  todayDot: {
+    marginTop: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: DesignColors.info,
   },
   calorieCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: DesignColors.backgroundSecondary,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
   overline: {
-    ...Typography.label,
-    color: DesignColors.gray500,
+    ...Typography.caption,
+    color: DesignColors.textTertiary,
   },
   calorieCopy: {
     gap: 6,
   },
   calorieValue: {
-    ...Typography.displayMedium,
-    color: DesignColors.black,
+    ...Typography.displayLarge,
+    color: DesignColors.textPrimary,
   },
   calorieLabel: {
-    ...Typography.bodySmall,
-    color: DesignColors.gray600,
+    ...Typography.bodyMedium,
+    color: DesignColors.textSecondary,
   },
   ringWrapper: {
     alignItems: 'center',
@@ -532,11 +733,11 @@ const styles = StyleSheet.create({
   },
   ringPercent: {
     ...Typography.bodyBold,
-    color: DesignColors.black,
+    color: DesignColors.textPrimary,
   },
   ringUnit: {
     ...Typography.caption,
-    color: DesignColors.gray500,
+    color: DesignColors.textTertiary,
   },
   guidanceText: {
     fontSize: 14,
@@ -547,6 +748,9 @@ const styles = StyleSheet.create({
   macroRow: {
     flexDirection: 'row',
     gap: 12,
+  },
+  macroCardWrapper: {
+    flex: 1,
   },
   macroHeader: {
     flexDirection: 'row',
@@ -606,11 +810,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: DesignColors.backgroundTertiary,
+    paddingBottom: 8,
   },
   recentImage: {
     width: 64,
     height: 64,
     borderRadius: 12,
+  },
+  recentImageWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  imageHidden: {
+    opacity: 0,
   },
   recentImagePlaceholder: {
     width: 64,
@@ -633,17 +849,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   recentHeadline: {
-    fontSize: 16,
-    color: DesignColors.black,
-    fontWeight: '700',
+    ...Typography.bodyLarge,
+    fontWeight: '600',
+    color: DesignColors.textPrimary,
     flex: 1,
   },
   recentMoreBtn: {
     padding: 4,
   },
   recentTimestamp: {
-    fontSize: 13,
-    color: DesignColors.gray500,
+    ...Typography.bodySmall,
+    color: DesignColors.textTertiary,
   },
   recentMacroRow: {
     flexDirection: 'row',
@@ -651,9 +867,8 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   recentMacroItem: {
-    fontSize: 13,
-    color: DesignColors.black,
-    fontWeight: '500',
+    ...Typography.bodyMedium,
+    color: DesignColors.textSecondary,
   },
   recentNote: {
     fontSize: 14,
@@ -669,7 +884,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: DesignColors.gray100,
+    borderBottomColor: DesignColors.backgroundTertiary,
   },
   ingredientRowLast: {
     borderBottomWidth: 0,
@@ -688,9 +903,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 24,
     bottom: 24,
-    paddingHorizontal: Spacing.lg,
-    height: 64,
-    borderRadius: BorderRadius.round,
+    paddingHorizontal: 20,
+    height: 56,
+    borderRadius: 28,
     flexDirection: 'row',
     gap: Spacing.sm,
     backgroundColor: '#171717',

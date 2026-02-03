@@ -588,6 +588,7 @@ export async function extractNutritionFromLabel(
   base64Image: string
 ): Promise<AdvancedAnalysisResult> {
   const startTime = Date.now();
+  const LABEL_EXTRACTION_TEMPERATURE = 0.1;
 
   try {
     // Import Gemini utilities
@@ -674,7 +675,7 @@ Return JSON with extracted nutrition data.`;
       model,
       prompt,
       base64Image,
-      temperature: 0.1, // Low temperature for accurate extraction
+      temperature: LABEL_EXTRACTION_TEMPERATURE, // Low temperature for accurate extraction
       maxOutputTokens: 500,
       responseSchema: schema,
     });

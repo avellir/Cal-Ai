@@ -16,7 +16,7 @@ export function Card({
   children,
   style,
   elevation = 'sm',
-  padding = Spacing.lg,
+  padding = Spacing.card,
   backgroundColor = DesignColors.surface,
   borderColor = DesignColors.gray100,
   ...rest
@@ -44,7 +44,7 @@ export function Card({
 
 const styles = StyleSheet.create({
   base: {
-    borderRadius: BorderRadius.xl,
+    borderRadius: BorderRadius.card,
     borderWidth: 1,
   },
 });
