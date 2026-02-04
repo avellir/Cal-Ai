@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     textAlign: 'center',
     lineHeight: 32,
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   summaryText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     textAlign: 'center',
     lineHeight: 24,
@@ -471,13 +471,13 @@ const styles = StyleSheet.create({
   },
   recommendationTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     marginBottom: 4,
   },
   recommendationSubtitle: {
     ...Typography.label,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
   },
   macrosGrid: {
     flexDirection: 'row',
@@ -525,7 +525,7 @@ const styles = StyleSheet.create({
   },
   macroLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   errorCard: {
@@ -543,7 +543,7 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.errorRedDark,
     lineHeight: 20,
   },
@@ -561,7 +561,7 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   getStartedButton: {
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   },
   getStartedButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.white,
   },
   finalProgressBar: {

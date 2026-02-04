@@ -139,13 +139,13 @@ const styles = StyleSheet.create({
   },
   progressPercentage: {
     fontSize: 64,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.primary,
     marginBottom: Spacing.sm,
   },
   progressLabel: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray500,
   },
   messageSection: {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   },
   mainMessage: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     textAlign: 'center',
     marginBottom: Spacing.sm,
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   subMessage: {
     ...Typography.subtitle,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     textAlign: 'center',
   },
   progressBarContainer: {
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   },
   checklistText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.black,
   },
   loadingSection: {

@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   content: {
@@ -697,7 +697,7 @@ const styles = StyleSheet.create({
   },
   foodName: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
   },
   servingSize: {
@@ -712,7 +712,7 @@ const styles = StyleSheet.create({
   },
   portionLabel: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray500,
     marginBottom: 10,
   },
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   },
   portionButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray500,
   },
   portionButtonTextActive: {
@@ -784,20 +784,20 @@ const styles = StyleSheet.create({
   },
   overline: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray500,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   caloriesValue: {
     fontSize: 56,
-    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
     color: DesignColors.textPrimary,
   },
   caloriesLabel: {
     fontSize: 12,
     color: DesignColors.textSecondary,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   macrosGrid: {
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
   },
   warningTitle: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.warningDark,
   },
   warningText: {
@@ -951,7 +951,7 @@ const styles = StyleSheet.create({
   },
   collapsibleTitle: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   microsList: {
@@ -980,7 +980,7 @@ const styles = StyleSheet.create({
   },
   microValue: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   microDvBadge: {
@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
   },
   microDvTextHigh: {
     color: DesignColors.infoDark,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
   },
   adjustmentsSection: {
     backgroundColor: DesignColors.gray50,
@@ -1013,7 +1013,7 @@ const styles = StyleSheet.create({
   },
   adjustmentsTitle: {
     fontSize: 13,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray700,
   },
   adjustmentsHint: {
@@ -1048,7 +1048,7 @@ const styles = StyleSheet.create({
   },
   ingredientName: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   adjustedBadge: {
@@ -1059,7 +1059,7 @@ const styles = StyleSheet.create({
   },
   adjustedBadgeText: {
     fontSize: 10,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.warningDark,
   },
   ingredientQty: {
@@ -1077,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   ingredientCal: {
     fontSize: 12,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   ingredientMacro: {
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
   },
   retakeText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray600,
   },
   saveButton: {
@@ -1133,7 +1133,7 @@ const styles = StyleSheet.create({
   },
   saveText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.white,
   },
 });

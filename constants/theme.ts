@@ -168,12 +168,37 @@ export const Shadows: Record<string, ViewStyle> = {
 };
 
 // Typography Styles
+const FontFamilies = {
+  regular: 'Manrope_400Regular',
+  medium: 'Manrope_500Medium',
+  semibold: 'Manrope_600SemiBold',
+  bold: 'Manrope_700Bold',
+  extrabold: 'Manrope_800ExtraBold',
+};
+
+const fontForWeight = (weight?: TextStyle['fontWeight']) => {
+  switch (weight) {
+    case '500':
+    case 500:
+      return FontFamilies.medium;
+    case '600':
+    case 600:
+      return FontFamilies.semibold;
+    case '700':
+    case 700:
+      return FontFamilies.bold;
+    case '800':
+    case 800:
+    case '900':
+    case 900:
+      return FontFamilies.extrabold;
+    default:
+      return FontFamilies.regular;
+  }
+};
+
 const baseFont: TextStyle = {
-  fontFamily: Platform.select({
-    ios: 'System',
-    android: 'Roboto',
-    web: 'System',
-  }),
+  fontFamily: FontFamilies.regular,
 };
 
 export const Typography: Record<string, TextStyle> = {
@@ -182,7 +207,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 48,
     lineHeight: 52,
-    fontWeight: '900',
+    fontFamily: fontForWeight('900'),
     letterSpacing: -0.5,
     color: DesignColors.textPrimary,
   },
@@ -190,7 +215,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 36,
     lineHeight: 40,
-    fontWeight: '800',
+    fontFamily: fontForWeight('800'),
     letterSpacing: -0.3,
     color: DesignColors.textPrimary,
   },
@@ -200,7 +225,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 28,
     lineHeight: 34,
-    fontWeight: '700',
+    fontFamily: fontForWeight('700'),
     letterSpacing: -0.2,
     color: DesignColors.textPrimary,
   },
@@ -208,7 +233,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 22,
     lineHeight: 28,
-    fontWeight: '700',
+    fontFamily: fontForWeight('700'),
     letterSpacing: -0.1,
     color: DesignColors.textPrimary,
   },
@@ -216,7 +241,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 18,
     lineHeight: 24,
-    fontWeight: '600',
+    fontFamily: fontForWeight('600'),
     letterSpacing: 0,
     color: DesignColors.textPrimary,
   },
@@ -226,7 +251,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 17,
     lineHeight: 24,
-    fontWeight: '400',
+    fontFamily: fontForWeight('400'),
     letterSpacing: -0.2,
     color: DesignColors.textSecondary,
   },
@@ -234,7 +259,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '400',
+    fontFamily: fontForWeight('400'),
     letterSpacing: -0.1,
     color: DesignColors.textSecondary,
   },
@@ -242,7 +267,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '400',
+    fontFamily: fontForWeight('400'),
     letterSpacing: 0,
     color: DesignColors.textSecondary,
   },
@@ -252,7 +277,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: '500',
+    fontFamily: fontForWeight('500'),
     letterSpacing: 0.1,
     textTransform: 'uppercase',
     color: DesignColors.textTertiary,
@@ -261,7 +286,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: '600',
+    fontFamily: fontForWeight('600'),
     letterSpacing: 0.2,
     textTransform: 'uppercase',
     color: DesignColors.textSecondary,
@@ -272,7 +297,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 28,
     lineHeight: 34,
-    fontWeight: '700',
+    fontFamily: fontForWeight('700'),
     letterSpacing: -0.2,
     color: DesignColors.textPrimary,
   },
@@ -280,7 +305,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 17,
     lineHeight: 24,
-    fontWeight: '500',
+    fontFamily: fontForWeight('500'),
     letterSpacing: -0.2,
     color: DesignColors.textSecondary,
   },
@@ -288,7 +313,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 17,
     lineHeight: 24,
-    fontWeight: '400',
+    fontFamily: fontForWeight('400'),
     letterSpacing: -0.2,
     color: DesignColors.textSecondary,
   },
@@ -296,7 +321,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 15,
     lineHeight: 20,
-    fontWeight: '600',
+    fontFamily: fontForWeight('600'),
     letterSpacing: -0.1,
     color: DesignColors.textPrimary,
   },
@@ -304,7 +329,7 @@ export const Typography: Record<string, TextStyle> = {
     ...baseFont,
     fontSize: 13,
     lineHeight: 18,
-    fontWeight: '600',
+    fontFamily: fontForWeight('600'),
     letterSpacing: 0,
     color: DesignColors.textPrimary,
   },
@@ -353,7 +378,7 @@ export const ComponentStyles = {
   },
   primaryButtonText: {
     fontSize: 15,
-    fontWeight: '600' as const,
+    fontFamily: fontForWeight('600'),
     color: DesignColors.textInverse,
   },
   secondaryButton: {
@@ -368,7 +393,7 @@ export const ComponentStyles = {
   },
   secondaryButtonText: {
     fontSize: 15,
-    fontWeight: '600' as const,
+    fontFamily: fontForWeight('600'),
     color: DesignColors.textPrimary,
   },
   card: {
@@ -405,17 +430,17 @@ export const Layout = {
 
 export const Fonts = Platform.select({
   ios: {
-    sans: 'System',
+    sans: FontFamilies.regular,
     serif: 'Georgia',
     mono: 'Menlo',
   },
   android: {
-    sans: 'Roboto',
+    sans: FontFamilies.regular,
     serif: 'serif',
     mono: 'monospace',
   },
   web: {
-    sans: 'System, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+    sans: FontFamilies.regular,
     serif: 'Georgia, serif',
     mono: 'monospace',
   },

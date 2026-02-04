@@ -45,22 +45,22 @@ const styles = StyleSheet.create({
   defaultSemiBold: {
     fontSize: 16,
     lineHeight: 22,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
   subtitle: {
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
   },
   title: {
     fontSize: 32,
     lineHeight: 34,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
   },
   link: {
     fontSize: 16,
     lineHeight: 22,
     textDecorationLine: 'underline',
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
 });

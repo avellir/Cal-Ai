@@ -2,47 +2,43 @@ import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
+/**
+ * Cal AI style minimal background
+ * - Top section with subtle horizontal gradient
+ * - Smooth fade to white for main content area
+ */
 export function AppBackground() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
-        colors={['#F4F6F9', '#F8FAFC', '#FFFFFF']}
-        locations={[0, 0.55, 1]}
-        start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <LinearGradient
-        colors={['#D9DDE0', '#F4EBE6']}
+        colors={['#e4e4e5', '#f2ebea']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.topWash}
+        style={styles.gradientTop}
       />
       <LinearGradient
-        colors={['rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 0)', 'rgba(255, 255, 255, 1)']}
-        locations={[0, 0.6, 1]}
+        colors={['rgba(255,255,255,0)', '#FFFFFF']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
-        style={styles.topWashFeather}
+        style={styles.gradientFade}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  topWash: {
+  gradientTop: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
-    height: '38%',
-    opacity: 0.5,
+    height: '35%', // Approx 30-35% of screen
   },
-  topWashFeather: {
+  gradientFade: {
     position: 'absolute',
-    top: 0,
+    top: '15%', // Start fading a bit before the bottom of the gradientTop to make it smooth
     left: 0,
     right: 0,
-    height: '38%',
+    height: '20%', // Overlap height
   },
 });

@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   filterChipText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray600,
   },
   filterChipTextActive: {
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   dateHeader: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray500,
     marginBottom: 12,
     textTransform: 'uppercase',
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   },
   mealName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     flex: 1,
   },
@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   macroText: {
     fontSize: 12,
     color: DesignColors.gray600,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
   },
   actionsRow: {
     flexDirection: 'row',
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   deleteBtnText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.error,
   },
   emptyState: {
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   emptyText: {

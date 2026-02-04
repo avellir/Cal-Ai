@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
   },
   percentageText: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
   },
 });

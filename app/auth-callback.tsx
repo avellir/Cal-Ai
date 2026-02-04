@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     marginBottom: 4,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   message: {
@@ -195,6 +195,6 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     color: DesignColors.white,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
 });

@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.subtitle,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     marginBottom: Spacing.xxxl,
     lineHeight: 22,
   },
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   toggleText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray500,
   },
   toggleTextActive: {
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     marginBottom: Spacing.md,
   },
@@ -366,14 +366,14 @@ const styles = StyleSheet.create({
   pickerValue: {
     flex: 1,
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     padding: 0,
     minWidth: 40,
   },
   pickerUnit: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray500,
   },
   continueButton: {
@@ -389,12 +389,12 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.white,
   },
   errorText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.errorRed,
     marginTop: Spacing.sm,
     lineHeight: 18,

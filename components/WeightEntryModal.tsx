@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   placeholder: {
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
   },
   prompt: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     lineHeight: 22,
   },
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray600,
   },
   input: {
@@ -245,6 +245,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: DesignColors.white,
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
   },
 });

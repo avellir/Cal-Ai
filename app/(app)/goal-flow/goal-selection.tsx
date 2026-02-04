@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.subtitle,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     marginBottom: Spacing.xxxl,
     lineHeight: 22,
   },
@@ -184,7 +184,7 @@ const styles = StyleSheet.create({
   },
   goalTitle: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     marginBottom: Spacing.sm,
   },
@@ -193,7 +193,7 @@ const styles = StyleSheet.create({
   },
   goalDescription: {
     fontSize: 14,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     color: DesignColors.gray500,
     textAlign: 'center',
     lineHeight: 20,
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.white,
   },
 });

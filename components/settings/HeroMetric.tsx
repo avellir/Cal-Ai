@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 34,
-    fontWeight: '800',
+    fontFamily: 'Manrope_800ExtraBold',
     color: DesignColors.iosLabel,
     letterSpacing: -0.5,
   },

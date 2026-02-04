@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.iosLabel,
   },
   email: {

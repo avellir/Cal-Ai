@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.subtitle,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     marginBottom: Layout.sectionGap,
     lineHeight: 22,
   },
@@ -230,12 +230,12 @@ const styles = StyleSheet.create({
   },
   currentWeightLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.gray500,
   },
   currentWeightValue: {
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
   },
   inputSection: {
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     marginBottom: Spacing.md,
   },
@@ -261,13 +261,13 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 24,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     padding: 0,
   },
   inputUnit: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.gray500,
     marginLeft: Spacing.md,
   },
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
   },
   differenceText: {
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
   },
   feedbackCard: {
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   feedbackText: {
     flex: 1,
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.warningDark,
     lineHeight: 20,
   },
@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.white,
   },
 });

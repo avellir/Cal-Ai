@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     ...Typography.subtitle,
-    fontWeight: '400',
+    fontFamily: 'Manrope_400Regular',
     marginBottom: Spacing.xxxl,
     lineHeight: 22,
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   },
   pickerValue: {
     fontSize: 18,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     textAlign: 'center',
     padding: 0,
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   ageText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.black,
     textAlign: 'center',
   },
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
   },
   continueButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.white,
   },
   modalOverlay: {
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
     textAlign: 'center',
     paddingVertical: Spacing.lg,
@@ -343,12 +343,12 @@ const styles = StyleSheet.create({
   },
   monthOptionText: {
     fontSize: 16,
-    fontWeight: '500',
+    fontFamily: 'Manrope_500Medium',
     color: DesignColors.black,
     textAlign: 'center',
   },
   monthOptionTextSelected: {
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
     color: DesignColors.black,
   },
 });

@@ -58,6 +58,6 @@ const styles = StyleSheet.create({
   error: {
     ...Typography.caption,
     color: DesignColors.error,
-    fontWeight: '700',
+    fontFamily: 'Manrope_700Bold',
   },
 });

@@ -26,7 +26,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 8,
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Manrope_600SemiBold',
     color: DesignColors.iosSecondaryLabel,
     textTransform: 'uppercase',
     letterSpacing: 0.5,

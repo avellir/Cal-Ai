@@ -1,47 +1,53 @@
 import * as Haptics from 'expo-haptics';
-import { Flame, Target, TrendingUp, type LucideIcon } from 'lucide-react-native';
+import { Apple, Pencil, Scale, type LucideIcon } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
-
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-wagmi-charts';
-import { DesignColors, Typography } from '@/constants/theme';
+
+import { AppBackground } from '@/components/ui/AppBackground';
+import { ProgressRing } from '@/components/ui/ProgressRing';
+import { DesignColors } from '@/constants/theme';
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 import { useUserWeightLogStore } from '@/store/userWeightLogStore';
 
 const COLORS = {
-  background: DesignColors.backgroundPrimary,
-  card: DesignColors.backgroundSecondary,
-  border: DesignColors.backgroundTertiary,
-  text: DesignColors.textPrimary,
-  secondary: DesignColors.textTertiary,
-  accent: DesignColors.info,
-  accentSoft: DesignColors.infoBg,
-  dot: 'rgba(199, 199, 204, 0.3)',
-  success: '#166534',
-  successBg: '#E8F5E9',
-  warning: '#B45309',
-  warningBg: '#FFF8E1',
-  neutral: DesignColors.textTertiary,
-  neutralBg: DesignColors.backgroundPrimary,
+  background: '#FFFFFF',
+  card: '#FFFFFF',
+  border: '#E6E6EB',
+  text: '#111111',
+  secondary: '#8E8E93',
+  pillBg: '#F1F2F4',
+  pillText: '#2C2C2E',
+  line: DesignColors.success,
+  ringTrack: '#E6E7EC',
+  success: '#1F7A3D',
+  successBg: '#E8F7ED',
+  tooltipBg: '#1E1E1E',
+  tooltipText: '#FFFFFF',
 };
 
-type RangeKey = '1w' | '1m' | '3m';
+const RING_COLORS = {
+  weight: ['#2C2C2E', '#2C2C2E'],
+  days: ['#4F6BFF', '#6C8BFF'],
+};
 
-const TIMEFRAMES: { key: RangeKey; label: string; days: number }[] = [
-  { key: '1w', label: '1W', days: 7 },
-  { key: '1m', label: '1M', days: 30 },
-  { key: '3m', label: '3M', days: 90 },
+type RangeKey = '90d' | '6m' | '1y' | 'all';
+
+const TIMEFRAMES: { key: RangeKey; label: string; days?: number }[] = [
+  { key: '90d', label: '90 Days', days: 90 },
+  { key: '6m', label: '6 Months', days: 180 },
+  { key: '1y', label: '1 Year', days: 365 },
+  { key: 'all', label: 'All time' },
 ];
 
-const MAINTENANCE_CALORIES = 2500;
-const CHART_HEIGHT = 180;
-const CHART_Y_GUTTER = 16;
-const CHART_X_AXIS_RESERVED_HEIGHT = 40;
-const CHART_DRAWING_HEIGHT = CHART_HEIGHT - CHART_X_AXIS_RESERVED_HEIGHT;
+const CHART_HEIGHT = 240;
+const CHART_Y_GUTTER = 8;
+
+const ALL_TIME_START = new Date(2010, 0, 1);
 
 type DayWeight = {
   date: Date;
@@ -49,11 +55,12 @@ type DayWeight = {
   weight: number | null;
 };
 
-type PillTone = 'green' | 'amber' | 'neutral';
-
-type Pill = {
+type StatCardProps = {
   label: string;
-  tone: PillTone;
+  value: string;
+  ringValue: number | null;
+  ringColors: string[];
+  Icon: LucideIcon;
 };
 
 export default function ProgressScreen() {
@@ -61,14 +68,12 @@ export default function ProgressScreen() {
   const userId = session?.user?.id ?? null;
 
   const meals = useMealLogStore((state) => state.meals);
-  const mealStatus = useMealLogStore((state) => state.status);
-  const mealError = useMealLogStore((state) => state.error);
   const fetchMeals = useMealLogStore((state) => state.fetchMeals);
 
-  const { goals, fetchGoals, getDailyTargets } = useUserGoalsStore();
+  const { goals, fetchGoals } = useUserGoalsStore();
   const { latest, history, fetchRange, isLoading: weightLoading, error: weightError } = useUserWeightLogStore();
 
-  const [rangeKey, setRangeKey] = useState<RangeKey>('1w');
+  const [rangeKey, setRangeKey] = useState<RangeKey>('90d');
   const [chartWidth, setChartWidth] = useState(0);
 
   const range = TIMEFRAMES.find((item) => item.key === rangeKey) ?? TIMEFRAMES[0];
@@ -94,14 +99,43 @@ export default function ProgressScreen() {
     });
   }, [userId, fetchRange, startDate, endDate]);
 
-  const dailyTargets = getDailyTargets();
   const currentWeight = latest?.weightKg ?? goals?.weightKg ?? null;
-  const goalWeight = goals?.targetWeightKg ?? 75;
+  const goalWeight = goals?.targetWeightKg ?? null;
 
   const daySeries = useMemo(() => buildDaySeries(startDate, endDate, history), [startDate, endDate, history]);
   const emaSeries = useMemo(() => calculateEmaSeries(daySeries, 0.2), [daySeries]);
 
   const hasWeightData = daySeries.some((day) => typeof day.weight === 'number');
+
+  const firstWeightTimestamp = useMemo(() => {
+    const firstEntry = daySeries.find((day) => typeof day.weight === 'number');
+    return firstEntry?.date.getTime() ?? null;
+  }, [daySeries]);
+
+  const lastWeightTimestamp = useMemo(() => {
+    for (let i = daySeries.length - 1; i >= 0; i -= 1) {
+      const value = daySeries[i]?.weight;
+      if (typeof value === 'number') return daySeries[i].date.getTime();
+    }
+    return null;
+  }, [daySeries]);
+
+  const chartDomain = useMemo(() => {
+    const startTs = startDate.getTime();
+    const endTs = endDate.getTime();
+    if (!firstWeightTimestamp || !lastWeightTimestamp) {
+      return { start: startTs, end: endTs };
+    }
+    const dataSpan = lastWeightTimestamp - firstWeightTimestamp;
+    const minPad = 24 * 60 * 60 * 1000;
+    const pad = Math.max(minPad, dataSpan * 0.08);
+    let domainStart = firstWeightTimestamp - pad;
+    let domainEnd = lastWeightTimestamp + pad;
+    if (domainEnd <= domainStart) {
+      domainEnd = domainStart + minPad;
+    }
+    return { start: domainStart, end: domainEnd };
+  }, [startDate, endDate, firstWeightTimestamp, lastWeightTimestamp]);
 
   const emaChartData = useMemo(() => {
     return daySeries
@@ -109,25 +143,23 @@ export default function ProgressScreen() {
         timestamp: day.date.getTime(),
         value: emaSeries[index],
       }))
-      .filter((point) => typeof point.value === 'number');
-  }, [daySeries, emaSeries]);
-
-  const rawDots = useMemo(() => {
-    return daySeries
-      .filter((day) => typeof day.weight === 'number')
-      .map((day) => ({
-        timestamp: day.date.getTime(),
-        value: day.weight as number,
-      }));
-  }, [daySeries]);
+      .filter(
+        (point): point is { timestamp: number; value: number } =>
+          typeof point.value === 'number' &&
+          point.timestamp >= chartDomain.start &&
+          point.timestamp <= chartDomain.end
+      );
+  }, [daySeries, emaSeries, chartDomain]);
 
   const yRange = useMemo(() => {
     const values: number[] = [];
+    daySeries.forEach((day) => {
+      if (typeof day.weight === 'number') values.push(day.weight);
+    });
     emaSeries.forEach((value) => {
       if (typeof value === 'number') values.push(value);
     });
-    rawDots.forEach((dot) => values.push(dot.value));
-    if (goalWeight != null) values.push(goalWeight);
+
     if (values.length === 0) {
       return { min: 0, max: 1 };
     }
@@ -138,7 +170,25 @@ export default function ProgressScreen() {
     }
     const padding = (max - min) * 0.08;
     return { min: min - padding, max: max + padding };
-  }, [emaSeries, rawDots, goalWeight]);
+  }, [daySeries, emaSeries, goalWeight]);
+
+  const rangeStartWeight = useMemo(() => {
+    const firstEntry = daySeries.find((day) => typeof day.weight === 'number');
+    return (firstEntry?.weight ?? null) as number | null;
+  }, [daySeries]);
+
+  const rangeLatestWeight = useMemo(() => {
+    for (let i = daySeries.length - 1; i >= 0; i -= 1) {
+      const value = daySeries[i]?.weight;
+      if (typeof value === 'number') return value;
+    }
+    return null;
+  }, [daySeries]);
+
+  const goalProgressPercent = useMemo(
+    () => getGoalProgressPercent(rangeStartWeight, rangeLatestWeight, goalWeight),
+    [rangeStartWeight, rangeLatestWeight, goalWeight]
+  );
 
   const mealsInRange = useMemo(() => {
     const startMs = startDate.getTime();
@@ -146,313 +196,159 @@ export default function ProgressScreen() {
     return meals.filter((meal) => meal.timestamp >= startMs && meal.timestamp <= endMs);
   }, [meals, startDate, endDate]);
 
-  const { avgCalories, avgProtein } = useMemo(() => {
-    const totalsByDay = new Map<string, { calories: number; protein: number }>();
-    let caloriesTotal = 0;
-    let proteinTotal = 0;
-
+  const loggedDays = useMemo(() => {
+    const days = new Set<string>();
     mealsInRange.forEach((meal) => {
-      const key = toDateKey(new Date(meal.timestamp));
-      const existing = totalsByDay.get(key) ?? { calories: 0, protein: 0 };
-      const next = {
-        calories: existing.calories + meal.calories,
-        protein: existing.protein + meal.macros.protein,
-      };
-      totalsByDay.set(key, next);
+      days.add(toDateKey(new Date(meal.timestamp)));
     });
-
-    totalsByDay.forEach((value) => {
-      caloriesTotal += value.calories;
-      proteinTotal += value.protein;
-    });
-
-    const dayCount = totalsByDay.size;
-    if (dayCount === 0) {
-      return { avgCalories: null, avgProtein: null };
-    }
-
-    return {
-      avgCalories: caloriesTotal / dayCount,
-      avgProtein: proteinTotal / dayCount,
-    };
+    return days.size;
   }, [mealsInRange]);
 
-  const proteinGoalPercent =
-    dailyTargets?.protein && avgProtein != null ? (avgProtein / dailyTargets.protein) * 100 : null;
-  const estimatedTdee = goals?.dailyCalories ?? null;
-
-  const caloriePill = getCaloriePill(avgCalories, MAINTENANCE_CALORIES);
-  const proteinPill = getProteinPill(proteinGoalPercent);
-  const tdeePill = getTdeePill(avgCalories, estimatedTdee);
+  const totalDays = useMemo(() => getTotalDays(startDate, endDate), [startDate, endDate]);
+  const loggedPercent = totalDays > 0 ? Math.min(100, (loggedDays / totalDays) * 100) : 0;
 
   const isChartLoading = weightLoading && !hasWeightData;
   const hasChartError = Boolean(weightError);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
+      <AppBackground />
+
       <Animated.View style={styles.screen} entering={FadeIn.duration(250)} exiting={FadeOut.duration(200)}>
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Animated.View style={styles.header} entering={FadeInDown.delay(40).duration(260)}>
             <Text style={styles.title}>Progress</Text>
-            <Text style={styles.subtitle}>Track your weight and energy trends over time.</Text>
           </Animated.View>
 
-          <Animated.View style={[styles.card, styles.cardShadow]} entering={FadeInDown.delay(80).duration(260)}>
-            <View style={styles.metricRow}>
-              <View style={styles.metricBlock}>
-                <Text style={styles.metricLabel}>Current Weight</Text>
-                <Text style={styles.metricValue}>
-                  {currentWeight != null ? formatWeight(currentWeight) : '—'}
-                </Text>
-              </View>
-              <View style={styles.metricDivider} />
-              <View style={styles.metricBlock}>
-                <Text style={styles.metricLabel}>Goal</Text>
-                <Text style={styles.metricValueSmall}>
-                  {goalWeight != null ? formatWeight(goalWeight) : '—'}
-                </Text>
-              </View>
-            </View>
+          <Animated.View style={styles.statRow} entering={FadeInDown.delay(80).duration(260)}>
+            <TopStatCard
+              label="Last weight"
+              value={currentWeight != null ? formatWeight(currentWeight) : '—'}
+              ringValue={goalProgressPercent}
+              ringColors={RING_COLORS.weight}
+              Icon={Scale}
+            />
+            <TopStatCard
+              label="Days logged"
+              value={`${loggedDays} logged`}
+              ringValue={loggedPercent}
+              ringColors={RING_COLORS.days}
+              Icon={Apple}
+            />
           </Animated.View>
 
           <Animated.View style={styles.rangeRow} entering={FadeInDown.delay(120).duration(260)}>
-            {TIMEFRAMES.map((option) => {
-              const isActive = option.key === rangeKey;
-              return (
-                <Pressable
-                  key={option.key}
-                  style={({ pressed }) => [
-                    styles.rangeChip,
-                    isActive && styles.rangeChipActive,
-                    pressed ? styles.rangeChipPressed : null,
-                  ]}
-                  onPress={() => {
-                    setRangeKey(option.key);
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
-                      /* no-op */
-                    });
-                  }}>
-                  <Text style={[styles.rangeChipText, isActive && styles.rangeChipTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <View style={styles.rangeGroup}>
+              {TIMEFRAMES.map((option) => {
+                const isActive = option.key === rangeKey;
+                return (
+                  <Pressable
+                    key={option.key}
+                    style={({ pressed }) => [
+                      styles.rangeChip,
+                      isActive && styles.rangeChipActive,
+                      pressed && styles.rangeChipPressed,
+                    ]}
+                    onPress={() => {
+                      setRangeKey(option.key);
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {
+                        /* no-op */
+                      });
+                    }}>
+                    <Text style={[styles.rangeChipText, isActive && styles.rangeChipTextActive]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Animated.View>
 
           <Animated.View style={[styles.card, styles.cardShadow, styles.chartCard]} entering={FadeInDown.delay(160).duration(260)}>
             <View style={styles.chartHeader}>
-              <Text style={styles.sectionTitle}>Weight Trend</Text>
-              <Text style={styles.sectionSubtitle}>7-day EMA</Text>
+              <Text style={styles.sectionTitle}>Goal Progress</Text>
+              <View style={styles.goalPill}>
+                <Pencil size={12} color="#8E8E93" />
+                <Text style={styles.goalPillText}>
+                  {goalProgressPercent != null ? `${Math.round(goalProgressPercent)}% of goal done` : '—'}
+                </Text>
+              </View>
             </View>
 
-          {isChartLoading ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Loading weight data...</Text>
-            </View>
-          ) : hasChartError ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>Unable to load weight</Text>
-              <Text style={styles.emptySubtitle}>{weightError}</Text>
-            </View>
-          ) : !hasWeightData ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No weigh-ins yet</Text>
-              <Text style={styles.emptySubtitle}>Log your weight to see trends.</Text>
-            </View>
-          ) : (
-            <>
+            {isChartLoading ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>Loading weight data...</Text>
+              </View>
+            ) : hasChartError ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>Unable to load weight</Text>
+                <Text style={styles.emptySubtitle}>{weightError}</Text>
+              </View>
+            ) : !hasWeightData ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No weigh-ins yet</Text>
+                <Text style={styles.emptySubtitle}>Log your weight to see trends.</Text>
+              </View>
+            ) : (
               <View
                 style={styles.chartContainer}
                 onLayout={(event) => setChartWidth(event.nativeEvent.layout.width)}>
-                {goalWeight != null && chartWidth > 0 ? (
-                  <View
-                    pointerEvents="none"
-                    style={[
-                      styles.referenceLine,
-                      {
-                        top: getYPosition(goalWeight, yRange, CHART_DRAWING_HEIGHT, CHART_Y_GUTTER),
-                        width: chartWidth,
-                      },
-                    ]}
-                  />
-                ) : null}
-
-                {chartWidth > 0
-                  ? rawDots.map((dot) => {
-                      const position = getChartPosition(
-                        dot.value,
-                        dot.timestamp,
-                        startDate.getTime(),
-                        endDate.getTime(),
-                        yRange,
-                        chartWidth,
-                        CHART_DRAWING_HEIGHT,
-                        CHART_Y_GUTTER
-                      );
-                      if (!position) return null;
-                      return (
-                        <View
-                          key={`dot-${dot.timestamp}`}
-                          pointerEvents="none"
-                          style={[
-                            styles.rawDot,
-                            { left: position.x - 3, top: position.y - 3 },
-                          ]}
-                        />
-                      );
-                    })
-                  : null}
-
                 <LineChart.Provider
                   data={emaChartData}
                   yRange={yRange}
-                  xDomain={[startDate.getTime(), endDate.getTime()]}>
+                  xDomain={[chartDomain.start, chartDomain.end]}>
                   <LineChart height={CHART_HEIGHT} width={chartWidth} yGutter={CHART_Y_GUTTER}>
-                    <LineChart.Path color={COLORS.accent} width={3} />
-                    <LineChart.CursorCrosshair>
+                    <LineChart.Path color={COLORS.line} width={2.6} />
+                    <LineChart.CursorCrosshair color={COLORS.line} outerSize={26} size={6}>
                       <LineChart.Tooltip
-                        textStyle={styles.tooltipText}
-                        containerStyle={styles.tooltipContainer}
-                      />
+                        position="top"
+                        yGutter={12}
+                        xGutter={12}
+                        cursorGutter={22}
+                        style={styles.tooltipContainer}>
+                        <View style={styles.tooltipContent}>
+                          <LineChart.PriceText
+                            precision={1}
+                            format={formatTooltipValue}
+                            style={styles.tooltipValue}
+                          />
+                        </View>
+                      </LineChart.Tooltip>
                     </LineChart.CursorCrosshair>
                   </LineChart>
                 </LineChart.Provider>
-
-                {goalWeight != null && chartWidth > 0 ? (
-                  <Text
-                    pointerEvents="none"
-                    style={[
-                      styles.referenceLabel,
-                      {
-                        top: getYPosition(goalWeight, yRange, CHART_DRAWING_HEIGHT, CHART_Y_GUTTER) - 12,
-                        right: 0,
-                      },
-                    ]}>
-                    Goal {formatWeight(goalWeight)}
-                  </Text>
-                ) : null}
               </View>
-              <View style={styles.chartLabelsRow}>
-                <Text style={styles.axisLabel}>{formatShortDate(startDate)}</Text>
-                <Text style={styles.axisLabel}>{formatShortDate(endDate)}</Text>
+            )}
+
+            {hasWeightData ? (
+              <View style={styles.notePill}>
+                <Text style={styles.noteText}>Great job! Consistency is key, and you're mastering it!</Text>
               </View>
-            </>
-          )}
+            ) : null}
           </Animated.View>
-
-          <Animated.View style={styles.insightGrid} entering={FadeInDown.delay(200).duration(260)}>
-            <InsightCard
-              label="Avg. Calories"
-              value={avgCalories != null ? `${Math.round(avgCalories)} kcal` : '—'}
-              pill={caloriePill}
-              Icon={Flame}
-            />
-            <InsightCard
-              label="Protein Goal %"
-              value={proteinGoalPercent != null ? `${Math.round(proteinGoalPercent)}%` : '—'}
-              pill={proteinPill}
-              Icon={Target}
-            />
-            <InsightCard
-              label="Estimated TDEE"
-              value={estimatedTdee != null ? `${Math.round(estimatedTdee)} kcal` : '—'}
-              pill={tdeePill}
-              Icon={TrendingUp}
-            />
-          </Animated.View>
-
-          {mealStatus === 'loading' && meals.length === 0 ? (
-            <Text style={styles.mealNote}>Loading nutrition data…</Text>
-          ) : mealError ? (
-            <Text style={styles.mealNote}>{mealError}</Text>
-          ) : null}
         </ScrollView>
       </Animated.View>
     </SafeAreaView>
   );
 }
 
-function InsightCard({
-  label,
-  value,
-  pill,
-  Icon,
-}: {
-  label: string;
-  value: string;
-  pill: Pill;
-  Icon: LucideIcon;
-}) {
-  const pillStyles = getPillStyles(pill.tone);
-
+function TopStatCard({ label, value, ringValue, ringColors, Icon }: StatCardProps) {
   return (
-    <View style={styles.insightCard}>
-      <View style={styles.insightHeader}>
-        <View style={styles.iconBubble}>
-          <Icon size={16} color={COLORS.accent} />
+    <View style={[styles.statCard, styles.cardShadow]}>
+      <ProgressRing
+        value={ringValue ?? 0}
+        size={70}
+        strokeWidth={7}
+        gradientColors={ringColors}
+        backgroundColor={COLORS.ringTrack}>
+        <View style={styles.ringIcon}>
+          <Icon size={16} color={ringColors[1] ?? COLORS.text} />
         </View>
-        <Text style={styles.insightLabel}>{label}</Text>
-      </View>
-      <Text style={styles.insightValue}>{value}</Text>
-      <View style={[styles.pill, pillStyles.container]}>
-        <Text style={[styles.pillText, pillStyles.text]}>{pill.label}</Text>
-      </View>
+      </ProgressRing>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
-}
-
-function getCaloriePill(avgCalories: number | null, maintenanceCalories: number) {
-  if (avgCalories == null) {
-    return { label: 'No Data', tone: 'neutral' as const };
-  }
-  if (avgCalories < maintenanceCalories) {
-    return { label: 'Caloric Deficit', tone: 'amber' as const };
-  }
-  return { label: 'On Track', tone: 'green' as const };
-}
-
-function getProteinPill(proteinPercent: number | null) {
-  if (proteinPercent == null) {
-    return { label: 'No Data', tone: 'neutral' as const };
-  }
-  if (proteinPercent >= 80) {
-    return { label: 'On Track', tone: 'green' as const };
-  }
-  return { label: 'Below Target', tone: 'amber' as const };
-}
-
-function getTdeePill(avgCalories: number | null, tdee: number | null) {
-  if (avgCalories == null || tdee == null || tdee === 0) {
-    return { label: 'No Data', tone: 'neutral' as const };
-  }
-  const ratio = avgCalories / tdee;
-  if (ratio >= 0.9 && ratio <= 1.1) {
-    return { label: 'On Track', tone: 'green' as const };
-  }
-  if (ratio < 0.9) {
-    return { label: 'Below Target', tone: 'amber' as const };
-  }
-  return { label: 'Above Target', tone: 'amber' as const };
-}
-
-function getPillStyles(tone: PillTone) {
-  if (tone === 'green') {
-    return {
-      container: { backgroundColor: COLORS.successBg },
-      text: { color: COLORS.success },
-    };
-  }
-  if (tone === 'amber') {
-    return {
-      container: { backgroundColor: COLORS.warningBg },
-      text: { color: COLORS.warning },
-    };
-  }
-  return {
-    container: { backgroundColor: COLORS.neutralBg },
-    text: { color: COLORS.neutral },
-  };
 }
 
 function buildDaySeries(start: Date, end: Date, entries: { recordedAt: string; weightKg: number }[]): DayWeight[] {
@@ -471,8 +367,7 @@ function buildDaySeries(start: Date, end: Date, entries: { recordedAt: string; w
     }
   });
 
-  const totalDays =
-    Math.floor((endDay.getTime() - startDay.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const totalDays = getTotalDays(startDay, endDay);
 
   for (let i = 0; i < totalDays; i += 1) {
     const date = new Date(startDay);
@@ -499,11 +394,45 @@ function calculateEmaSeries(series: DayWeight[], alpha: number) {
   });
 }
 
-function getDateRange(days: number) {
+function getDateRange(days?: number) {
   const endDate = endOfDay(new Date());
+  if (!days) {
+    return { startDate: startOfDay(ALL_TIME_START), endDate };
+  }
   const startDate = startOfDay(endDate);
   startDate.setDate(startDate.getDate() - (days - 1));
   return { startDate, endDate };
+}
+
+function getTotalDays(start: Date, end: Date) {
+  const startDay = startOfDay(start).getTime();
+  const endDay = startOfDay(end).getTime();
+  return Math.floor((endDay - startDay) / (24 * 60 * 60 * 1000)) + 1;
+}
+
+function getGoalProgressPercent(
+  startWeight: number | null,
+  currentWeight: number | null,
+  goalWeight: number | null
+) {
+  if (startWeight == null || currentWeight == null || goalWeight == null) return null;
+  if (goalWeight === startWeight) return 100;
+
+  if (goalWeight < startWeight) {
+    const total = startWeight - goalWeight;
+    if (total <= 0) return null;
+    const progress = ((startWeight - currentWeight) / total) * 100;
+    return clamp(progress, 0, 100);
+  }
+
+  const total = goalWeight - startWeight;
+  if (total <= 0) return null;
+  const progress = ((currentWeight - startWeight) / total) * 100;
+  return clamp(progress, 0, 100);
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function startOfDay(date: Date) {
@@ -521,42 +450,17 @@ function toDateKey(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-function formatShortDate(date: Date) {
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
 function formatWeight(value: number) {
   const rounded = Math.round(value * 10) / 10;
   return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} kg`;
 }
 
-function getChartPosition(
-  value: number,
-  timestamp: number,
-  startTimestamp: number,
-  endTimestamp: number,
-  stats: { min: number; max: number },
-  width: number,
-  height: number,
-  yGutter: number
-) {
-  if (width <= 0 || endTimestamp === startTimestamp) return null;
-  const xRatio = (timestamp - startTimestamp) / (endTimestamp - startTimestamp);
-  const clampedX = Math.max(0, Math.min(1, xRatio));
-  const yRatio = (value - stats.min) / (stats.max - stats.min);
-  const clampedY = Math.max(0, Math.min(1, yRatio));
-  const heightBetweenGutters = height - yGutter * 2;
-  return {
-    x: clampedX * width,
-    y: yGutter + (1 - clampedY) * heightBetweenGutters,
-  };
-}
-
-function getYPosition(value: number, stats: { min: number; max: number }, height: number, yGutter: number) {
-  const ratio = (value - stats.min) / (stats.max - stats.min);
-  const clamped = Math.max(0, Math.min(1, ratio));
-  const heightBetweenGutters = height - yGutter * 2;
-  return yGutter + (1 - clamped) * heightBetweenGutters;
+function formatTooltipValue({ value }: { value: string }) {
+  'worklet';
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return value;
+  const rounded = Math.round(numeric * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)} kg`;
 }
 
 const styles = StyleSheet.create({
@@ -564,223 +468,200 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
+
   screen: {
     flex: 1,
   },
   content: {
-    paddingHorizontal: 20,
-    paddingVertical: 24,
-    gap: 20,
+    paddingHorizontal: 24, // increased from 20
+    paddingTop: 10,
+    paddingBottom: 40,
+    gap: 24, // increased from 14 for better breathing room
   },
   header: {
-    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 34, // increased from 26
+    fontFamily: 'Manrope_800ExtraBold', // bolder
+    color: COLORS.text,
+    letterSpacing: -0.5,
+  },
+  statRow: {
+    flexDirection: 'row',
+    gap: 16, // increased from 12
+  },
+  statCard: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: COLORS.card,
+    borderRadius: 24, // increased from 18
+    // Removed border for cleaner look or make it very subtle
+    borderWidth: 1,
+    borderColor: '#F2F2F7',
+    paddingVertical: 24, // increased padding
+    paddingHorizontal: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  ringIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F7F7F9',
+  },
+  statLabel: {
+    fontSize: 13,
+    color: COLORS.secondary,
+    fontFamily: 'Manrope_600SemiBold',
+    marginTop: 4,
+  },
+  statValue: {
+    fontSize: 20,
+    fontFamily: 'Manrope_800ExtraBold',
     color: COLORS.text,
   },
-  subtitle: {
-    fontSize: 14,
-    color: COLORS.secondary,
+  rangeRow: {
+    alignItems: 'stretch',
+    width: '100%',
+  },
+  rangeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 4,
+    padding: 5,
+    borderRadius: 20,
+    backgroundColor: '#F6F6F8', // Lighter grey background for the group
+    width: '100%',
+  },
+  rangeChip: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 16,
+    alignItems: 'center',
+  },
+  rangeChipActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  rangeChipPressed: {
+    opacity: 0.8,
+  },
+  rangeChipText: {
+    fontSize: 13,
+    fontFamily: 'Manrope_600SemiBold',
+    color: '#8E8E93',
+    textAlign: 'center',
+  },
+  rangeChipTextActive: {
+    color: COLORS.text,
+    fontFamily: 'Manrope_700Bold',
   },
   card: {
     backgroundColor: COLORS.card,
-    borderRadius: 20,
+    borderRadius: 26,
     borderWidth: 1,
-    borderColor: COLORS.border,
+    borderColor: '#F2F2F7',
     padding: 20,
   },
   cardShadow: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  metricRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metricBlock: {
-    flex: 1,
-    gap: 6,
-  },
-  metricLabel: {
-    ...Typography.caption,
-    color: DesignColors.textTertiary,
-  },
-  metricValue: {
-    ...Typography.displayMedium,
-    color: DesignColors.textPrimary,
-  },
-  metricValueSmall: {
-    ...Typography.displayMedium,
-    color: DesignColors.textPrimary,
-  },
-  metricDivider: {
-    width: 1,
-    height: 48,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 16,
-  },
-  rangeRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  rangeChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.card,
-  },
-  rangeChipActive: {
-    borderColor: DesignColors.primary900,
-    backgroundColor: DesignColors.primary900,
-  },
-  rangeChipPressed: {
-    opacity: 0.9,
-    transform: [{ scale: 0.98 }],
-  },
-  rangeChipText: {
-    fontSize: 13,
-    color: COLORS.secondary,
-    fontWeight: '600',
-  },
-  rangeChipTextActive: {
-    color: DesignColors.textInverse,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.04,
+    shadowRadius: 16,
+    elevation: 4,
   },
   chartCard: {
-    gap: 16,
-  },
-  chartContainer: {
-    height: CHART_HEIGHT,
-    position: 'relative',
-  },
-  chartLabelsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 8,
+    gap: 20,
   },
   chartHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontFamily: 'Manrope_700Bold',
     color: COLORS.text,
   },
-  sectionSubtitle: {
+  goalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: '#F6F6F8', // lighter
+    // borderWidth: 0, // cleaner
+  },
+  goalPillText: {
     fontSize: 12,
-    color: COLORS.secondary,
+    fontFamily: 'Manrope_600SemiBold',
+    color: COLORS.text,
   },
-  axisLabel: {
-    fontSize: 12,
-    color: COLORS.secondary,
-  },
-  referenceLabel: {
-    position: 'absolute',
-    fontSize: 10,
-    color: COLORS.secondary,
-  },
-  referenceLine: {
-    position: 'absolute',
-    borderTopWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: 'rgba(142, 142, 147, 0.35)',
-  },
-  rawDot: {
-    position: 'absolute',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: COLORS.dot,
+  chartContainer: {
+    height: CHART_HEIGHT,
+    marginTop: 8,
   },
   emptyState: {
-    paddingVertical: 24,
+    paddingVertical: 32,
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   emptyTitle: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontFamily: 'Manrope_600SemiBold',
     color: COLORS.text,
   },
   emptySubtitle: {
-    fontSize: 13,
+    fontSize: 14,
     color: COLORS.secondary,
   },
   tooltipContainer: {
-    backgroundColor: COLORS.card,
-    borderRadius: 10,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  tooltipText: {
-    fontSize: 12,
-    color: COLORS.text,
-    fontWeight: '600',
-  },
-  insightGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  insightCard: {
-    flexBasis: '48%',
-    backgroundColor: COLORS.card,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    gap: 10,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
-  iconBubble: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  tooltipContent: {
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.accentSoft,
   },
-  insightHeader: {
-    flexDirection: 'row',
+  tooltipValue: {
+    fontSize: 13,
+    color: '#FFFFFF',
+    fontFamily: 'Manrope_700Bold',
+  },
+  notePill: {
+    marginTop: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 18,
+    backgroundColor: '#EBF9F0', // Slightly more vibrant/lighter green
+    borderWidth: 0,
     alignItems: 'center',
-    gap: 6,
   },
-  insightLabel: {
-    fontSize: 12,
-    color: COLORS.secondary,
-  },
-  insightValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  pill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  pillText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  mealNote: {
-    fontSize: 12,
-    color: COLORS.secondary,
+  noteText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#2B8A4E', // Darker success text
+    fontFamily: 'Manrope_600SemiBold',
     textAlign: 'center',
   },
 });

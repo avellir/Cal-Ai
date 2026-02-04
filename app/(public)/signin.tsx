@@ -345,7 +345,7 @@ export default function SignInScreen() {
         title: {
           fontSize: 32,
         color: DesignColors.black,
-        fontWeight: '600',
+        fontFamily: 'Manrope_600SemiBold',
   },
         subtitle: {
           marginTop: Spacing.md,
@@ -362,7 +362,7 @@ export default function SignInScreen() {
         fieldLabel: {
           fontSize: 16,
         color: DesignColors.black,
-        fontWeight: '500',
+        fontFamily: 'Manrope_500Medium',
   },
         otpSection: {
           marginTop: Spacing.xxl,
@@ -391,7 +391,7 @@ export default function SignInScreen() {
         ctaText: {
           color: DesignColors.white,
         fontSize: 17,
-        fontWeight: '600',
+        fontFamily: 'Manrope_600SemiBold',
   },
         successMessage: {
           marginTop: 4,
@@ -405,7 +405,7 @@ export default function SignInScreen() {
         magicLinkHeading: {
           fontSize: 16,
         color: DesignColors.black,
-        fontWeight: '500',
+        fontFamily: 'Manrope_500Medium',
   },
         magicLinkCopy: {
           fontSize: 14,
@@ -420,7 +420,7 @@ export default function SignInScreen() {
         secondaryText: {
           fontSize: 14,
         color: DesignColors.info,
-        fontWeight: '500',
+        fontFamily: 'Manrope_500Medium',
   },
         actions: {
           marginTop: 48,
@@ -459,7 +459,7 @@ export default function SignInScreen() {
   },
         buttonLabel: {
           fontSize: 18,
-        fontWeight: '500',
+        fontFamily: 'Manrope_500Medium',
   },
         appleLabel: {
           color: DesignColors.white,
