@@ -11,9 +11,9 @@ export function AppBackground() {
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <LinearGradient
-        colors={['#e4e4e5', '#f2ebea']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        colors={['#dbe1e1', '#ece8ec']}
+        start={{ x: 1, y: 0 }}
+        end={{ x: 0, y: 1 }}
         style={styles.gradientTop}
       />
       <LinearGradient
@@ -32,11 +32,11 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: '35%', // Approx 30-35% of screen
+    height: '55%', // Extended lower for better contrast
   },
   gradientFade: {
     position: 'absolute',
-    top: '15%', // Start fading a bit before the bottom of the gradientTop to make it smooth
+    top: '35%', // Start fading lower down
     left: 0,
     right: 0,
     height: '20%', // Overlap height

@@ -78,9 +78,9 @@ type MacroCardConfig = {
 };
 
 const MACRO_CONFIGS: MacroCardConfig[] = [
-  { key: 'protein', label: 'Protein', Icon: Fish, iconColor: COLORS.protein, bgColor: COLORS.proteinBg },
-  { key: 'carbs', label: 'Carbs', Icon: Leaf, iconColor: COLORS.carbs, bgColor: COLORS.carbsBg },
-  { key: 'fat', label: 'Fat', Icon: Droplet, iconColor: COLORS.fat, bgColor: COLORS.fatBg },
+  { key: 'protein', label: 'Protein left', Icon: Fish, iconColor: COLORS.protein, bgColor: COLORS.proteinBg },
+  { key: 'carbs', label: 'Carbs left', Icon: Leaf, iconColor: COLORS.carbs, bgColor: COLORS.carbsBg },
+  { key: 'fat', label: 'Fat left', Icon: Droplet, iconColor: COLORS.fat, bgColor: COLORS.fatBg },
 ];
 
 const DAY_PILL_WIDTH = 48;
@@ -266,13 +266,12 @@ export default function HomeScreen() {
                 style={styles.heroCard}
                 onPress={() => !hasGoalsValue && router.push('/(app)/goal-flow' as any)}>
                 <LinearGradient
-                  colors={['#1C1C1E', '#2C2C2E']}
+                  colors={['#FFFFFF', '#F5F5F7']}
                   start={{ x: 0, y: 0 }}
                   end={{ x: 1, y: 1 }}
                   style={StyleSheet.absoluteFill}
                 />
-                {/* Accent line */}
-                <View style={styles.heroAccentLine} />
+
 
                 <View style={styles.heroContent}>
                   <View style={styles.heroCopy}>
@@ -296,7 +295,7 @@ export default function HomeScreen() {
                       size={100}
                       strokeWidth={10}
                       gradientColors={[COLORS.success, '#30D158']}
-                      backgroundColor="rgba(255,255,255,0.15)">
+                      backgroundColor="rgba(0,0,0,0.05)">
                       <View style={styles.ringInner}>
                         <Text style={styles.ringPercent}>
                           {hasGoalsValue ? `${percentageConsumed}%` : '—'}
@@ -312,22 +311,19 @@ export default function HomeScreen() {
 
 
             {/* Macro Cards */}
+            {/* Macro Cards */}
             <Animated.View entering={FadeInDown.duration(280).delay(140)} style={styles.macroSection}>
-              <Text style={styles.sectionLabel}>MACROS</Text>
+              {/* <Text style={styles.sectionLabel}>MACROS</Text> */}
               <View style={styles.macroRow}>
                 {MACRO_CONFIGS.map((config, index) => {
                   let remaining = 0;
-                  let progress = 0;
                   if (hasGoalsValue) {
                     if (config.key === 'protein') {
                       remaining = proteinRemaining;
-                      progress = macroProgress.protein;
                     } else if (config.key === 'carbs') {
                       remaining = carbsRemaining;
-                      progress = macroProgress.carbs;
                     } else {
                       remaining = fatRemaining;
-                      progress = macroProgress.fat;
                     }
                   }
 
@@ -336,23 +332,27 @@ export default function HomeScreen() {
                       key={config.key}
                       entering={FadeInDown.delay(180 + index * 60).duration(260)}
                       style={styles.macroCard}>
-                      <View style={[styles.macroIconBg, { backgroundColor: config.bgColor }]}>
-                        <config.Icon size={18} color={config.iconColor} />
+
+                      <View style={styles.macroContentTop}>
+                        <Text style={styles.macroValue}>{Math.round(remaining)}g</Text>
+                        <Text style={styles.macroLabel} numberOfLines={1} adjustsFontSizeToFit>{config.label}</Text>
                       </View>
-                      <Text style={styles.macroValue}>{Math.round(remaining)}g</Text>
-                      <Text style={styles.macroLabel}>{config.label}</Text>
-                      {/* Progress bar */}
-                      <View style={styles.macroProgressBg}>
-                        <View
-                          style={[
-                            styles.macroProgressFill,
-                            { width: `${Math.min(100, progress * 100)}%`, backgroundColor: config.iconColor },
-                          ]}
-                        />
+
+                      <View style={styles.macroRingContainer}>
+                        <View style={[styles.macroRing, { borderColor: config.bgColor }]}>
+                          <config.Icon size={28} color={config.iconColor} fill={config.iconColor} />
+                        </View>
                       </View>
                     </Animated.View>
                   );
                 })}
+              </View>
+
+              {/* Pagination Dots (Visual Only) */}
+              <View style={styles.paginationDots}>
+                <View style={[styles.dot, styles.dotActive]} />
+                <View style={styles.dot} />
+                <View style={styles.dot} />
               </View>
             </Animated.View>
 
@@ -661,11 +661,13 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
+    shadowColor: '#1C1C1E',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
     shadowRadius: 24,
-    elevation: 12,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   heroAccentLine: {
     position: 'absolute',
@@ -701,20 +703,20 @@ const styles = StyleSheet.create({
   heroLabel: {
     fontSize: 11,
     fontFamily: 'Manrope_600SemiBold',
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.textSecondary,
     letterSpacing: 1.5,
   },
   heroValue: {
     fontSize: 48,
     fontFamily: 'Manrope_800ExtraBold',
-    color: '#FFFFFF',
+    color: COLORS.textPrimary,
     letterSpacing: -2,
     lineHeight: 52,
   },
   heroSubtext: {
     fontSize: 14,
     fontFamily: 'Manrope_500Medium',
-    color: 'rgba(255,255,255,0.5)',
+    color: COLORS.textSecondary,
     marginTop: 4,
   },
   ringContainer: {
@@ -728,12 +730,12 @@ const styles = StyleSheet.create({
   ringPercent: {
     fontSize: 18,
     fontFamily: 'Manrope_700Bold',
-    color: '#FFFFFF',
+    color: COLORS.textPrimary,
   },
   ringLabel: {
     fontSize: 11,
     fontFamily: 'Manrope_500Medium',
-    color: 'rgba(255,255,255,0.5)',
+    color: COLORS.textSecondary,
     marginTop: 2,
   },
 
@@ -752,11 +754,13 @@ const styles = StyleSheet.create({
   macroRow: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 24,
   },
   macroCard: {
     flex: 1,
+    height: 180,
     padding: 16,
-    borderRadius: 20,
+    borderRadius: 24,
     backgroundColor: COLORS.cardBg,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
@@ -765,37 +769,49 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.04,
     shadowRadius: 12,
     elevation: 2,
+    justifyContent: 'space-between',
   },
-  macroIconBg: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+  macroContentTop: {
+    alignItems: 'flex-start',
   },
   macroValue: {
-    fontSize: 22,
+    fontSize: 32,
     fontFamily: 'Manrope_700Bold',
     color: COLORS.textPrimary,
-    letterSpacing: -0.5,
+    letterSpacing: -1,
+    marginBottom: 4,
+    lineHeight: 36,
   },
   macroLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: 'Manrope_500Medium',
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    marginBottom: 10,
+    color: COLORS.textPrimary,
   },
-  macroProgressBg: {
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.06)',
-    overflow: 'hidden',
+  macroRingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  macroProgressFill: {
-    height: '100%',
-    borderRadius: 2,
+  macroRing: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    borderWidth: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E5E5EA',
+  },
+  dotActive: {
+    backgroundColor: '#1C1C1E',
   },
 
   // Recent Section
@@ -823,8 +839,9 @@ const styles = StyleSheet.create({
   mealCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    height: 126,
     padding: 12,
-    borderRadius: 16,
+    borderRadius: 20,
     backgroundColor: COLORS.cardBg,
     borderWidth: 1,
     borderColor: COLORS.cardBorder,
@@ -835,52 +852,52 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   mealImageWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 80,
+    height: 80,
+    borderRadius: 18,
     overflow: 'hidden',
   },
   mealImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 80,
+    height: 80,
+    borderRadius: 18,
   },
   imageHidden: {
     opacity: 0,
   },
   mealImagePlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 14,
+    width: 80,
+    height: 80,
+    borderRadius: 18,
     backgroundColor: 'rgba(0,0,0,0.04)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mealImageEmoji: {
-    fontSize: 22,
+    fontSize: 32,
   },
   mealContent: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
   },
   mealName: {
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: 'Manrope_600SemiBold',
     color: COLORS.textPrimary,
   },
   mealTime: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: 'Manrope_400Regular',
     color: COLORS.textTertiary,
     marginTop: 2,
   },
   mealMacros: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 6,
+    gap: 12,
+    marginTop: 8,
   },
   mealMacroItem: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: 'Manrope_500Medium',
     color: COLORS.textSecondary,
   },

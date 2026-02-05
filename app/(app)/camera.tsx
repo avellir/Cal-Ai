@@ -1,8 +1,16 @@
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
@@ -11,6 +19,96 @@ import { analyzeAdvancedFoodImage } from '@/services/foodAnalysis';
 
 export default function CameraScreen() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [mediaLibraryPermission, setMediaLibraryPermission] =
+    useState<ImagePicker.PermissionResponse | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const preloadMediaLibraryPermission = async () => {
+      try {
+        const current = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+        if (!isMounted) {
+          return;
+        }
+
+        if (!current.granted && current.canAskAgain) {
+          const requested = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+          if (!isMounted) {
+            return;
+          }
+
+          setMediaLibraryPermission(requested);
+          return;
+        }
+
+        setMediaLibraryPermission(current);
+      } catch (error) {
+        console.error('Media library permission check error:', error);
+      }
+    };
+
+    preloadMediaLibraryPermission();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const refreshPermission = async () => {
+      try {
+        const current = await ImagePicker.getMediaLibraryPermissionsAsync();
+
+        if (!isMounted) {
+          return;
+        }
+
+        setMediaLibraryPermission(current);
+      } catch (error) {
+        console.error('Media library permission refresh error:', error);
+      }
+    };
+
+    const subscription = AppState.addEventListener('change', nextState => {
+      if (nextState === 'active') {
+        refreshPermission();
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  const ensureMediaLibraryPermission = async () => {
+    let permission = mediaLibraryPermission;
+
+    if (!permission) {
+      permission = await ImagePicker.getMediaLibraryPermissionsAsync();
+    }
+
+    if (!permission.granted && permission.canAskAgain) {
+      permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    }
+
+    setMediaLibraryPermission(permission);
+
+    if (!permission.granted) {
+      Alert.alert(
+        'Permission Required',
+        'Photo library permission is needed to select photos.'
+      );
+      return false;
+    }
+
+    return true;
+  };
 
   const handleTakePhoto = async () => {
     try {
@@ -44,22 +142,16 @@ export default function CameraScreen() {
 
   const handleChoosePhoto = async () => {
     try {
-      // Request media library permissions
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const hasPermission = await ensureMediaLibraryPermission();
 
-      if (status !== 'granted') {
-        Alert.alert(
-          'Permission Required',
-          'Photo library permission is needed to select photos.'
-        );
+      if (!hasPermission) {
         return;
       }
 
       // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
+        allowsEditing: false,
         quality: 0.8,
       });
 
@@ -331,4 +423,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-

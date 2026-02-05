@@ -359,13 +359,11 @@ export default function SettingsScreen() {
                 pressed && styles.heroCardPressed,
               ]}>
               <LinearGradient
-                colors={['#1C1C1E', '#2C2C2E']}
+                colors={['#FFFFFF', '#F5F5F7']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={StyleSheet.absoluteFill}
               />
-              {/* Decorative accent line */}
-              <View style={styles.heroCardAccent} />
 
               <View style={styles.heroCardContent}>
                 <View style={styles.heroCardHeader}>
@@ -373,7 +371,7 @@ export default function SettingsScreen() {
                     <View style={styles.heroCardDot} />
                     <Text style={styles.heroCardLabel}>DAILY TARGET</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.5)" />
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.textTertiary} />
                 </View>
 
                 <View style={styles.heroCardMetric}>
@@ -731,11 +729,13 @@ const styles = StyleSheet.create({
   heroCard: {
     borderRadius: 24,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 32,
-    elevation: 12,
+    shadowColor: '#1C1C1E',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 24,
+    elevation: 8,
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
   },
   heroCardPressed: {
     opacity: 0.95,
@@ -773,7 +773,7 @@ const styles = StyleSheet.create({
   heroCardLabel: {
     fontSize: 11,
     letterSpacing: 1.8,
-    color: 'rgba(255,255,255,0.6)',
+    color: COLORS.textSecondary,
     fontFamily: 'Manrope_600SemiBold',
   },
   heroCardMetric: {
@@ -782,14 +782,14 @@ const styles = StyleSheet.create({
   heroCardValue: {
     fontSize: 52,
     letterSpacing: -2,
-    color: '#FFFFFF',
+    color: COLORS.textPrimary,
     fontFamily: 'Manrope_800ExtraBold',
     lineHeight: 56,
   },
   heroCardUnit: {
     marginTop: 4,
     fontSize: 16,
-    color: 'rgba(255,255,255,0.5)',
+    color: COLORS.textSecondary,
     fontFamily: 'Manrope_500Medium',
   },
   heroCardHint: {
