@@ -24,7 +24,15 @@ import { Card } from '@/components/ui/Card';
 import { DesignColors, Spacing, Typography } from '@/constants/theme';
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
-import { getConfidenceMessage } from '@/services/foodAnalysis';
+import {
+  getAnalysisAdjustments,
+  getAnalysisDisplayName,
+  getAnalysisIngredientViews,
+  getAnalysisServingSizeLabel,
+  getConfidenceMessage,
+  isSuccessfulAnalysisData,
+  type SuccessfulAnalysisData,
+} from '@/services/foodAnalysis';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 
 type IngredientData = {
@@ -186,18 +194,8 @@ function MicronutrientRow({
 
 export default function FoodResultScreen() {
   const params = useLocalSearchParams<{
-    foodName: string;
-    calories: string;
-    protein: string;
-    carbs: string;
-    fat: string;
-    servingSize: string;
-    confidence: string;
-    imageUri: string;
-    ingredientsData?: string;
-    adjustments?: string;
-    warnings?: string;
-    micronutrients?: string;
+    analysisData?: string;
+    imageUri?: string;
   }>();
 
   const session = useSessionStore((state) => state.session);
@@ -209,28 +207,37 @@ export default function FoodResultScreen() {
   const [showMicros, setShowMicros] = useState(false);
   const [portionMultiplier, setPortionMultiplier] = useState(1);
 
-  // Parse data
-  const ingredients: IngredientData[] = params.ingredientsData
-    ? JSON.parse(params.ingredientsData)
-    : [];
+  const analysisData = useMemo<SuccessfulAnalysisData | null>(() => {
+    if (!params.analysisData) {
+      return null;
+    }
 
-  const adjustments: string[] = params.adjustments
-    ? JSON.parse(params.adjustments)
-    : [];
+    try {
+      const parsed = JSON.parse(params.analysisData);
+      return isSuccessfulAnalysisData(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }, [params.analysisData]);
 
-  const warnings: string[] = params.warnings
-    ? JSON.parse(params.warnings)
-    : [];
+  const ingredients: IngredientData[] = useMemo(
+    () => (analysisData ? getAnalysisIngredientViews(analysisData) : []),
+    [analysisData]
+  );
+  const adjustments = useMemo(
+    () => (analysisData ? getAnalysisAdjustments(analysisData) : []),
+    [analysisData]
+  );
+  const warnings = analysisData?.warnings ?? [];
+  const micronutrients: MicronutrientData = {};
 
-const micronutrients: MicronutrientData = useMemo(() => (
-  params.micronutrients ? JSON.parse(params.micronutrients) : {}
-), [params.micronutrients]);
-
-  const confidence = parseInt(params.confidence || '0');
-  const baseCalories = Number.parseFloat(params.calories ?? '0') || 0;
-  const baseProtein = Number.parseFloat(params.protein ?? '0') || 0;
-  const baseCarbs = Number.parseFloat(params.carbs ?? '0') || 0;
-  const baseFat = Number.parseFloat(params.fat ?? '0') || 0;
+  const foodName = analysisData ? getAnalysisDisplayName(analysisData) : 'Food Analysis';
+  const servingSizeLabel = analysisData ? getAnalysisServingSizeLabel(analysisData) : '1 serving';
+  const confidence = analysisData ? Math.round(analysisData.confidence) : 0;
+  const baseCalories = analysisData?.totalNutrition.calories ?? 0;
+  const baseProtein = analysisData?.totalNutrition.protein ?? 0;
+  const baseCarbs = analysisData?.totalNutrition.carbs ?? 0;
+  const baseFat = analysisData?.totalNutrition.fat ?? 0;
 
   // Scaled values based on portion multiplier
   const scaled = useMemo(() => ({
@@ -280,6 +287,31 @@ const micronutrients: MicronutrientData = useMemo(() => (
   const hasAdjustedIngredients = ingredients.some(ing => ing.wasAdjusted);
   const confidenceMessage = getConfidenceMessage(confidence);
 
+  if (!analysisData) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              styles.backButton,
+              pressed && styles.backButtonPressed,
+            ]}>
+            <Feather name="arrow-left" size={24} color={DesignColors.black} />
+          </Pressable>
+          <Text style={styles.title}>Food Analysis</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>Analysis data unavailable</Text>
+          <Text style={styles.emptyStateText}>
+            This result could not be restored. Please run the scan again.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const handleSave = async () => {
     if (isSaving) return;
 
@@ -293,7 +325,7 @@ const micronutrients: MicronutrientData = useMemo(() => (
 
     try {
       await addMeal(userId, {
-        name: params.foodName?.trim() || 'Logged meal',
+        name: foodName.trim() || 'Logged meal',
         calories: scaled.calories,
         macros: {
           protein: Math.round(scaled.protein),
@@ -301,9 +333,9 @@ const micronutrients: MicronutrientData = useMemo(() => (
           fat: Math.round(scaled.fat)
         },
         note: portionMultiplier !== 1
-          ? `${params.servingSize} (${portionMultiplier}×)`
-          : params.servingSize || null,
-        servingSizeLabel: params.servingSize ?? undefined,
+          ? `${servingSizeLabel} (${portionMultiplier}×)`
+          : servingSizeLabel,
+        servingSizeLabel,
         quantity: portionMultiplier,
         imageUri: params.imageUri || null,
       });
@@ -353,8 +385,8 @@ const micronutrients: MicronutrientData = useMemo(() => (
 
         {/* Food Name & Serving */}
         <View style={styles.nameSection}>
-          <Text style={styles.foodName}>{params.foodName}</Text>
-          <Text style={styles.servingSize}>{params.servingSize}</Text>
+          <Text style={styles.foodName}>{foodName}</Text>
+          <Text style={styles.servingSize}>{servingSizeLabel}</Text>
         </View>
 
         {/* Hero calories */}
@@ -641,6 +673,24 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: DesignColors.white,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 22,
+    fontFamily: 'Manrope_700Bold',
+    color: DesignColors.black,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: DesignColors.gray500,
+    textAlign: 'center',
   },
   header: {
     flexDirection: 'row',

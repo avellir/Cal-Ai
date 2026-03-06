@@ -106,11 +106,16 @@ export function validateAdvancedAnalysis(
   });
 
   // Return result with adjusted confidence
+  const mergedWarnings = Array.from(
+    new Set([...(result.data.warnings ?? []), ...validation.warnings])
+  );
+
   return {
     ...result,
     data: {
       ...result.data,
       confidence: validation.adjustedConfidence,
+      warnings: mergedWarnings,
     },
   };
 }

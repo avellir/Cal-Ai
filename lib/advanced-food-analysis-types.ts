@@ -17,6 +17,7 @@
  */
 export type FoodRegion = {
   description: string; // e.g., "main protein on left side of plate"
+  dishName?: string; // e.g., "chicken stir-fry"
   boundingBox?: {
     x: number;
     y: number;
@@ -162,6 +163,7 @@ export function isFoodRegion(value: unknown): value is FoodRegion {
 
   return (
     typeof region.description === 'string' &&
+    (region.dishName === undefined || typeof region.dishName === 'string') &&
     typeof region.confidence === 'number' &&
     region.confidence >= 0 &&
     region.confidence <= 100 &&

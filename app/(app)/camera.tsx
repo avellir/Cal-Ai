@@ -173,36 +173,11 @@ export default function CameraScreen() {
       setIsAnalyzing(false);
 
       if (result.success && result.data) {
-        // Use the simplified nutrition data structure
-        const foodName = result.data.foodName;
-        const servingSize = result.data.servingSize;
-
-        // Navigate to results screen with nutrition data
         router.push({
           pathname: '/(app)/food-result',
           params: {
-            foodName,
-            calories: result.data.calories.toString(),
-            protein: result.data.protein.toString(),
-            carbs: result.data.carbs.toString(),
-            fat: result.data.fat.toString(),
-            servingSize,
-            confidence: result.data.confidence.toString(),
             imageUri,
-            reasoning: result.data.reasoning || '',
-            warnings: result.data.warnings?.length ? JSON.stringify(result.data.warnings) : undefined,
-            // Pass ingredient breakdown for transparency
-            ingredientsData: result.data.ingredients?.length
-              ? JSON.stringify(result.data.ingredients.map(ing => ({
-                  name: ing.name,
-                  quantity: ing.grams,
-                  unit: 'g',
-                  calories: ing.calories,
-                  protein: ing.protein,
-                  carbs: ing.carbs,
-                  fat: ing.fat,
-                })))
-              : undefined,
+            analysisData: JSON.stringify(result.data),
           },
         });
       } else {

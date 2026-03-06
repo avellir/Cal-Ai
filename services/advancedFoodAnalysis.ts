@@ -204,6 +204,44 @@ function clamp(value: number, min: number, max: number): number {
     return Math.min(max, Math.max(min, value));
 }
 
+function normalizeBoundingBox(
+    boundingBox: Record<string, unknown> | undefined
+): FoodRegion['boundingBox'] | undefined {
+    if (!boundingBox) {
+        return undefined;
+    }
+
+    if (
+        typeof boundingBox.x === 'number' &&
+        typeof boundingBox.y === 'number' &&
+        typeof boundingBox.width === 'number' &&
+        typeof boundingBox.height === 'number'
+    ) {
+        return {
+            x: boundingBox.x,
+            y: boundingBox.y,
+            width: boundingBox.width,
+            height: boundingBox.height,
+        };
+    }
+
+    if (
+        typeof boundingBox.xmin === 'number' &&
+        typeof boundingBox.ymin === 'number' &&
+        typeof boundingBox.xmax === 'number' &&
+        typeof boundingBox.ymax === 'number'
+    ) {
+        return {
+            x: boundingBox.xmin,
+            y: boundingBox.ymin,
+            width: Math.max(0, boundingBox.xmax - boundingBox.xmin),
+            height: Math.max(0, boundingBox.ymax - boundingBox.ymin),
+        };
+    }
+
+    return undefined;
+}
+
 function normalizeBeverageQuantityMl(quantityMl: number): {
     adjustedQuantity: number;
     wasAdjusted: boolean;
@@ -259,8 +297,9 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         const segmentationData: SegmentationResult = {
             regions: combinedResult.regions.map(r => ({
                 description: r.description,
+                dishName: r.dishName,
                 confidence: r.confidence,
-                boundingBox: r.boundingBox
+                boundingBox: normalizeBoundingBox(r.boundingBox as Record<string, unknown> | undefined)
             })),
             overallConfidence: combinedResult.overallConfidence,
             notes: combinedResult.notes
@@ -493,6 +532,15 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
         const lookupResults = await Promise.all(lookupPromises);
         const validIngredients = lookupResults.filter((i): i is EnrichedIngredient => i !== null);
+        const adjustments = Array.from(
+            new Set(
+                validIngredients.flatMap(ingredient =>
+                    ingredient.wasAdjusted && ingredient.adjustmentReason
+                        ? [`${ingredient.name}: ${ingredient.adjustmentReason}`]
+                        : []
+                )
+            )
+        );
 
         // 5. Aggregation & Validation
         stagesCompleted.push('aggregation');
@@ -510,7 +558,8 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 ingredients: validIngredients,
                 regions: segmentationData.regions,
                 confidence: segmentationData.overallConfidence, // Baseline confidence
-                warnings
+                warnings,
+                adjustments: adjustments.length > 0 ? adjustments : undefined,
             },
             metadata: {
                 processingTimeMs: Date.now() - startTime,
