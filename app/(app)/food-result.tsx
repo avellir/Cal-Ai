@@ -326,11 +326,12 @@ export default function FoodResultScreen() {
     try {
       await addMeal(userId, {
         name: foodName.trim() || 'Logged meal',
-        calories: scaled.calories,
+        // Store base nutrition; the meal service applies quantity when reading.
+        calories: baseCalories,
         macros: {
-          protein: Math.round(scaled.protein),
-          carbs: Math.round(scaled.carbs),
-          fat: Math.round(scaled.fat)
+          protein: baseProtein,
+          carbs: baseCarbs,
+          fat: baseFat,
         },
         note: portionMultiplier !== 1
           ? `${servingSizeLabel} (${portionMultiplier}×)`
