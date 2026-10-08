@@ -1,6 +1,7 @@
 import type { AddMealInput, MealLogEntry, MealType } from '@/lib/meal-log-types';
 import { supabase } from '@/lib/supabase';
 import { deleteMealPhoto, getSignedPhotoUrl, uploadMealPhoto } from './mealPhotoStorage';
+import { getMealInputError } from './mealValidation';
 
 type MealEntryRow = {
   id: string;
@@ -157,6 +158,12 @@ export async function fetchLoggedMeals(userId: string): Promise<MealLogEntry[]> 
 }
 
 export async function logMeal(userId: string, input: AddMealInput): Promise<MealLogEntry> {
+  const validationError = getMealInputError(input);
+  if (validationError) throw new Error(validationError);
+  const quantity = input.quantity ?? 1;
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    throw new Error('Meal quantity must be a positive finite number.');
+  }
   const profileId = await ensureProfile(userId);
 
   const { data: foodItem, error: foodInsertError } = await supabase
@@ -185,6 +192,7 @@ export async function logMeal(userId: string, input: AddMealInput): Promise<Meal
       profile_id: profileId,
       meal_type: input.mealType ?? DEFAULT_MEAL_TYPE,
       notes: input.note ?? input.servingSizeLabel ?? null,
+      ...(input.loggedAt ? { logged_at: input.loggedAt } : {}),
     })
     .select('id, logged_at, meal_type, notes')
     .single();
@@ -198,7 +206,7 @@ export async function logMeal(userId: string, input: AddMealInput): Promise<Meal
     .insert({
       meal_id: meal.id,
       food_id: foodItem.id,
-      quantity: input.quantity ?? 1,
+      quantity,
     })
     .select(
       `
@@ -342,7 +350,7 @@ function mapMealRowToEntry(row: MealRow): MealLogEntry {
   return {
     id: row.id,
     name: firstFood?.name ?? 'Logged meal',
-    calories: caloriesTotal,
+    calories: Math.round(caloriesTotal),
     macros,
     note: row.notes ?? firstFood?.serving_unit ?? null,
     imageUri: null,

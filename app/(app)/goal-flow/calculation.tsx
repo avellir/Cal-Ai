@@ -4,8 +4,9 @@ import { calculateNutritionPlan } from '@/services/goalCalculation';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
-import { useGoalFlow } from './GoalFlowContext';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { useGoalFlow } from '@/components/goal-flow/GoalFlowContext';
 
 const CHECKLIST_ITEMS = [
   'Calories',

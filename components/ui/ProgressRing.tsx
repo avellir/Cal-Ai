@@ -5,6 +5,8 @@ import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-na
 
 import { DesignColors } from '@/constants/theme';
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 type ProgressRingProps = {
   value: number; // 0-100
   size?: number;
@@ -38,8 +40,6 @@ export function ProgressRing({
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: circumference * (1 - progressValue.value / 100),
   }));
-
-  const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
   return (
     <View style={[styles.container, { width: size, height: size }]}>

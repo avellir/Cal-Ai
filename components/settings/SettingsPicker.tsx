@@ -2,7 +2,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import * as Haptics from 'expo-haptics';
 import { useCallback } from 'react';
-import { ActionSheetIOS, Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActionSheetIOS, Alert, Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { DesignColors } from '@/constants/theme';
 
@@ -17,8 +18,6 @@ type SettingsPickerProps = {
 
 export function SettingsPicker({ icon, label, value, options, onSelect, isLast = false }: SettingsPickerProps) {
   const open = useCallback(() => {
-    const selectedIndex = Math.max(0, options.indexOf(value));
-
     if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
@@ -47,7 +46,7 @@ export function SettingsPicker({ icon, label, value, options, onSelect, isLast =
         { text: 'Cancel', style: 'cancel' as const },
       ]
     );
-  }, [label, onSelect, options, value]);
+  }, [label, onSelect, options]);
 
   return (
     <TouchableOpacity

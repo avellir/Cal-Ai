@@ -1,27 +1,30 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
 
 type ChipProps = {
   label: string;
   selected?: boolean;
+  disabled?: boolean;
   onPress?: () => void;
   style?: ViewStyle;
 };
 
-export function Chip({ label, selected = false, onPress, style }: ChipProps) {
+export function Chip({ label, selected = false, disabled = false, onPress, style }: ChipProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected }}
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
         {
           backgroundColor: selected ? DesignColors.primaryBg : DesignColors.white,
           borderColor: selected ? DesignColors.primary : DesignColors.gray200,
-          opacity: pressed ? 0.9 : 1,
+          opacity: disabled ? 0.5 : pressed ? 0.9 : 1,
           transform: [{ scale: pressed ? 0.98 : 1 }],
         },
         style,

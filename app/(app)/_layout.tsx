@@ -28,7 +28,6 @@ export default function AppLayout() {
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
       <Stack.Screen name="camera" options={{ headerShown: false }} />
       <Stack.Screen name="food-result" options={{ headerShown: false }} />
       <Stack.Screen name="goal-flow" options={{ headerShown: false }} />

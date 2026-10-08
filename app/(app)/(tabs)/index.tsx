@@ -1,36 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Droplet, Fish, Leaf, type LucideIcon } from 'lucide-react-native';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import Animated, {
   FadeIn,
   FadeInDown,
   FadeOut,
-  runOnJS,
-  useAnimatedReaction,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { AppBackground } from '@/components/ui/AppBackground';
 import { ProgressRing } from '@/components/ui/ProgressRing';
 import { Shimmer } from '@/components/ui/Shimmer';
+import { useDiaryDate } from '@/hooks/useDiaryDate';
+import { getDiaryDates, getLocalDateKey, parseLocalDateKey } from '@/lib/mealDates';
 import { resolveImageUri, useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
-import { aggregateDailyNutrition } from '@/services/nutritionAggregation';
+import { aggregateDailyNutrition, getMealsForDate } from '@/services/nutritionAggregation';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -101,6 +90,12 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const params = useLocalSearchParams<{ date?: string }>();
+  const initialDateKey = params.date && parseLocalDateKey(params.date) ? params.date : undefined;
+  return <DiaryHome key={initialDateKey ?? 'today'} initialDateKey={initialDateKey} />;
+}
+
+function DiaryHome({ initialDateKey }: { initialDateKey?: string }) {
   const session = useSessionStore((state) => state.session);
   const meals = useMealLogStore((state) => state.meals);
   const status = useMealLogStore((state) => state.status);
@@ -108,61 +103,38 @@ export default function HomeScreen() {
   const fetchMeals = useMealLogStore((state) => state.fetchMeals);
   const userId = session?.user?.id ?? null;
 
-  const dates = useMemo(() => getRecentDates(7), []);
-  const todayIndex = dates.findIndex((item) => item.isToday);
-  const initialIndex = todayIndex >= 0 ? todayIndex : dates.length - 1;
-  const [selectedIndex, setSelectedIndex] = useState(initialIndex);
+  const { todayKey, selectedDateKey, selectDate } = useDiaryDate(initialDateKey);
+  const dates = getDiaryDates(todayKey, selectedDateKey).map(date => ({
+    date,
+    label: new Intl.DateTimeFormat('en-US', { weekday: 'short' }).format(date).slice(0, 1),
+    day: String(date.getDate()),
+    isToday: getLocalDateKey(date) === todayKey,
+  }));
+  const selectedIndex = dates.findIndex(item => getLocalDateKey(item.date) === selectedDateKey);
+  const selectedDate = parseLocalDateKey(selectedDateKey)!;
+  const selectedDateLabel = selectedDateKey === todayKey ? 'Today' :
+    new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(selectedDate);
   const listRef = useRef<FlatList<DayItem>>(null);
-  const dayLayouts = useRef<Record<number, { x: number; width: number }>>({});
-  const highlightX = useSharedValue(0);
-  const highlightWidth = useSharedValue(DAY_PILL_WIDTH);
 
-  const recentMeals = meals.slice(0, 2);
+  const dayMeals = getMealsForDate(meals, selectedDate);
+  const recentMeals = dayMeals;
 
   const fetchGoals = useUserGoalsStore((state) => state.fetchGoals);
-  const hasGoals = useUserGoalsStore((state) => state.hasGoals);
-  const getDailyTargets = useUserGoalsStore((state) => state.getDailyTargets);
+  const goals = useUserGoalsStore((state) => state.goals);
 
-  const dailyTotals = aggregateDailyNutrition(meals);
-  const dailyTargets = getDailyTargets();
+  const dailyTotals = aggregateDailyNutrition(dayMeals, selectedDate);
+  const dailyTargets = goals ? {
+    calories: goals.dailyCalories, protein: goals.dailyProteinG,
+    carbs: goals.dailyCarbsG, fat: goals.dailyFatG,
+  } : null;
 
-  const caloriesRemaining = dailyTargets ? Math.max(0, dailyTargets.calories - dailyTotals.calories) : 0;
-  const proteinRemaining = dailyTargets ? Math.max(0, dailyTargets.protein - dailyTotals.protein) : 0;
-  const carbsRemaining = dailyTargets ? Math.max(0, dailyTargets.carbs - dailyTotals.carbs) : 0;
-  const fatRemaining = dailyTargets ? Math.max(0, dailyTargets.fat - dailyTotals.fat) : 0;
+  const calorieBalance = dailyTargets ? dailyTargets.calories - dailyTotals.calories : 0;
 
   const percentageConsumed = dailyTargets && dailyTargets.calories > 0
     ? Math.min(100, Math.round((dailyTotals.calories / dailyTargets.calories) * 100))
     : 0;
 
-  const macroProgress = {
-    protein: dailyTargets && dailyTargets.protein > 0 ? Math.min(1, dailyTotals.protein / dailyTargets.protein) : 0,
-    carbs: dailyTargets && dailyTargets.carbs > 0 ? Math.min(1, dailyTotals.carbs / dailyTargets.carbs) : 0,
-    fat: dailyTargets && dailyTargets.fat > 0 ? Math.min(1, dailyTotals.fat / dailyTargets.fat) : 0,
-  };
-
-  const hasGoalsValue = hasGoals();
-  const calorieAnim = useSharedValue(0);
-  const [calorieDisplay, setCalorieDisplay] = useState(0);
-
-  const updateHighlight = (index: number) => {
-    const layout = dayLayouts.current[index];
-    if (!layout) return;
-    highlightX.value = withSpring(layout.x, { damping: 18, stiffness: 160 });
-    highlightWidth.value = withSpring(layout.width, { damping: 18, stiffness: 160 });
-  };
-
-  const highlightStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: highlightX.value }],
-    width: highlightWidth.value,
-  }));
-
-  const fabBaseScale = useSharedValue(0.8);
-  const fabPressScale = useSharedValue(1);
-
-  const fabAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: fabBaseScale.value * fabPressScale.value }],
-  }));
+  const hasGoalsValue = dailyTargets !== null;
 
   useEffect(() => {
     if (!userId) return;
@@ -173,31 +145,11 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollToIndex({ index: selectedIndex, animated: true, viewPosition: 0.5 });
-    updateHighlight(selectedIndex);
-  }, [selectedIndex]);
-
-  useEffect(() => {
-    fabBaseScale.value = withSpring(1, { damping: 14, stiffness: 160 });
-  }, [fabBaseScale]);
-
-  useEffect(() => {
-    if (!hasGoalsValue) {
-      setCalorieDisplay(0);
-      return;
-    }
-    calorieAnim.value = 0;
-    calorieAnim.value = withTiming(caloriesRemaining, { duration: 800 });
-  }, [caloriesRemaining, hasGoalsValue, calorieAnim]);
-
-  useAnimatedReaction(
-    () => Math.round(calorieAnim.value),
-    (value, previous) => {
-      if (value === previous) return;
-      runOnJS(setCalorieDisplay)(value);
-    }
-  );
+  }, [selectedIndex, todayKey]);
 
   const isInitialLoading = status === 'loading' && meals.length === 0;
+  const totalsAvailable = !isInitialLoading && (!mealError || meals.length > 0);
+  const calorieDisplay = Math.round(dailyTargets ? Math.abs(calorieBalance) : dailyTotals.calories);
 
   return (
     <View style={styles.container}>
@@ -217,16 +169,11 @@ export default function HomeScreen() {
                 <Text style={styles.brandEmoji}>🍎</Text>
                 <Text style={styles.brandText}>Cal AI</Text>
               </View>
-              <Pressable style={styles.streakBadge}>
-                <Ionicons name="flame" size={16} color={COLORS.warning} />
-                <Text style={styles.streakText}>0</Text>
-              </Pressable>
             </Animated.View>
 
             {/* Day Selector */}
             <Animated.View entering={FadeInDown.duration(280).delay(40)} style={styles.dayStripContainer}>
               <View style={styles.dayStripWrapper}>
-                <Animated.View pointerEvents="none" style={[styles.dayPillHighlight, highlightStyle]} />
                 <FlatList
                   ref={listRef}
                   data={dates}
@@ -237,13 +184,8 @@ export default function HomeScreen() {
                   renderItem={({ item, index }) => (
                     <DatePill
                       item={item}
-                      index={index}
                       isSelected={index === selectedIndex}
-                      onSelect={setSelectedIndex}
-                      onLayoutItem={(layout) => {
-                        dayLayouts.current[index] = layout;
-                        if (index === selectedIndex) updateHighlight(index);
-                      }}
+                      onSelect={() => selectDate(getLocalDateKey(item.date))}
                     />
                   )}
                   getItemLayout={(_, index) => ({
@@ -278,15 +220,23 @@ export default function HomeScreen() {
                     <View style={styles.heroLabelRow}>
                       <View style={styles.heroDot} />
                       <Text style={styles.heroLabel}>
-                        {hasGoalsValue ? 'TODAY' : 'GET STARTED'}
+                        {selectedDateLabel.toUpperCase()}
                       </Text>
                     </View>
                     <Text style={styles.heroValue}>
-                      {hasGoalsValue ? calorieDisplay.toLocaleString() : 'Set Goals'}
+                      {totalsAvailable ? calorieDisplay.toLocaleString() : '—'}
                     </Text>
                     <Text style={styles.heroSubtext}>
-                      {hasGoalsValue ? 'calories remaining' : 'Tap to configure your targets'}
+                      {isInitialLoading ? 'Loading your diary...' : !totalsAvailable ? 'Unable to load totals' :
+                        dailyTargets ? calorieBalance < 0 ? 'calories over target' : 'calories remaining' : 'calories eaten'}
                     </Text>
+                    {totalsAvailable && dailyTargets ? (
+                      <Text style={styles.heroSubtext}>
+                        {Math.round(dailyTotals.calories)} eaten · {dailyTargets.calories} {selectedDateKey === todayKey ? 'target' : 'current target'}
+                      </Text>
+                    ) : !dailyTargets && totalsAvailable ? (
+                      <Text style={styles.seeAllText}>Set daily targets</Text>
+                    ) : null}
                   </View>
 
                   <View style={styles.ringContainer}>
@@ -298,7 +248,7 @@ export default function HomeScreen() {
                       backgroundColor="rgba(0,0,0,0.05)">
                       <View style={styles.ringInner}>
                         <Text style={styles.ringPercent}>
-                          {hasGoalsValue ? `${percentageConsumed}%` : '—'}
+                          {totalsAvailable && hasGoalsValue ? `${percentageConsumed}%` : '—'}
                         </Text>
                         <Text style={styles.ringLabel}>eaten</Text>
                       </View>
@@ -316,16 +266,9 @@ export default function HomeScreen() {
               {/* <Text style={styles.sectionLabel}>MACROS</Text> */}
               <View style={styles.macroRow}>
                 {MACRO_CONFIGS.map((config, index) => {
-                  let remaining = 0;
-                  if (hasGoalsValue) {
-                    if (config.key === 'protein') {
-                      remaining = proteinRemaining;
-                    } else if (config.key === 'carbs') {
-                      remaining = carbsRemaining;
-                    } else {
-                      remaining = fatRemaining;
-                    }
-                  }
+                  const consumed = dailyTotals[config.key];
+                  const balance = dailyTargets ? dailyTargets[config.key] - consumed : consumed;
+                  const label = `${config.key.charAt(0).toUpperCase() + config.key.slice(1)} ${dailyTargets ? balance < 0 ? 'over' : 'left' : 'eaten'}`;
 
                   return (
                     <Animated.View
@@ -334,8 +277,9 @@ export default function HomeScreen() {
                       style={styles.macroCard}>
 
                       <View style={styles.macroContentTop}>
-                        <Text style={styles.macroValue}>{Math.round(remaining)}g</Text>
-                        <Text style={styles.macroLabel} numberOfLines={1} adjustsFontSizeToFit>{config.label}</Text>
+                        <Text style={styles.macroValue}>{totalsAvailable ? `${Math.round(Math.abs(balance))}g` : '—'}</Text>
+                        <Text style={styles.macroLabel} numberOfLines={1} adjustsFontSizeToFit>{label}</Text>
+                        {totalsAvailable && dailyTargets ? <Text style={styles.macroIntake}>{Math.round(consumed)}g eaten</Text> : null}
                       </View>
 
                       <View style={styles.macroRingContainer}>
@@ -359,10 +303,10 @@ export default function HomeScreen() {
             {/* Recent Meals */}
             <Animated.View entering={FadeInDown.duration(280).delay(240)} style={styles.recentSection}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Recently Logged</Text>
+                <Text style={styles.sectionTitle}>Meals · {selectedDateLabel}</Text>
                 {meals.length > 0 && (
                   <Pressable onPress={() => router.push('/(app)/meal-history')}>
-                    <Text style={styles.seeAllText}>See all</Text>
+                    <Text style={styles.seeAllText}>History</Text>
                   </Pressable>
                 )}
               </View>
@@ -376,6 +320,9 @@ export default function HomeScreen() {
                 <View style={styles.emptyCard}>
                   <Ionicons name="alert-circle-outline" size={24} color={COLORS.textTertiary} />
                   <Text style={styles.emptyText}>{mealError}</Text>
+                  <Pressable accessibilityRole="button" onPress={() => userId && fetchMeals(userId).catch(console.error)}>
+                    <Text style={styles.seeAllText}>Retry loading meals</Text>
+                  </Pressable>
                 </View>
               ) : recentMeals.length > 0 ? (
                 <View style={styles.mealsList}>
@@ -407,8 +354,8 @@ export default function HomeScreen() {
               ) : (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyEmoji}>📸</Text>
-                  <Text style={styles.emptyTitle}>No meals logged yet</Text>
-                  <Text style={styles.emptyText}>Snap a photo of your meal to get started</Text>
+                  <Text style={styles.emptyTitle}>No meals for {selectedDateLabel.toLowerCase()}</Text>
+                  <Text style={styles.emptyText}>Log a meal for this day to get started</Text>
                 </View>
               )}
             </Animated.View>
@@ -418,10 +365,8 @@ export default function HomeScreen() {
           <AnimatedPressable
             accessibilityRole="button"
             accessibilityLabel="Add a new meal"
-            style={[styles.fab, fabAnimatedStyle]}
-            onPress={() => router.push('/(app)/camera')}
-            onPressIn={() => { fabPressScale.value = withSpring(0.95, { damping: 16, stiffness: 180 }); }}
-            onPressOut={() => { fabPressScale.value = withSpring(1, { damping: 16, stiffness: 180 }); }}>
+            style={styles.fab}
+            onPress={() => router.push({ pathname: '/(app)/camera', params: { date: selectedDateKey } })}>
             <Ionicons name="camera" size={22} color="#FFFFFF" />
             <Text style={styles.fabLabel}>Log meal</Text>
           </AnimatedPressable>
@@ -437,30 +382,20 @@ export default function HomeScreen() {
 
 function DatePill({
   item,
-  index,
   isSelected,
   onSelect,
-  onLayoutItem,
 }: {
   item: DayItem;
-  index: number;
   isSelected: boolean;
-  onSelect: (index: number) => void;
-  onLayoutItem: (layout: { x: number; width: number }) => void;
+  onSelect: () => void;
 }) {
-  const scale = useSharedValue(1);
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
   return (
-    <Animated.View
-      style={[styles.dayPillWrapper, animatedStyle]}
-      onLayout={(e) => onLayoutItem(e.nativeEvent.layout)}>
+    <View style={styles.dayPillWrapper}>
       <Pressable
-        onPress={() => onSelect(index)}
-        onPressIn={() => { scale.value = withSpring(0.95, { damping: 16, stiffness: 180 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 16, stiffness: 180 }); }}
+        accessibilityRole="button"
+        accessibilityLabel={item.date.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+        accessibilityState={{ selected: isSelected }}
+        onPress={onSelect}
         style={[styles.dayPill, isSelected && styles.dayPillActive]}>
         <Text style={[styles.dayPillLabel, isSelected && styles.dayPillLabelActive]}>
           {item.label}
@@ -470,7 +405,7 @@ function DatePill({
         </Text>
         {item.isToday && <View style={[styles.todayDot, isSelected && styles.todayDotActive]} />}
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -510,26 +445,6 @@ function formatMealTimestamp(timestamp: number): string {
   const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
 
   return `${isToday ? 'Today' : dayFormatter.format(date)} • ${timeFormatter.format(date)}`;
-}
-
-function getRecentDates(days: number): DayItem[] {
-  const today = new Date();
-  const items: DayItem[] = [];
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    const label = new Intl.DateTimeFormat('en-US', { weekday: 'short' })
-      .format(date)
-      .slice(0, 1)
-      .toUpperCase();
-    items.push({
-      date,
-      label,
-      day: `${date.getDate()}`,
-      isToday: date.toDateString() === today.toDateString(),
-    });
-  }
-  return items;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -786,6 +701,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: 'Manrope_500Medium',
     color: COLORS.textPrimary,
+  },
+  macroIntake: {
+    fontSize: 11,
+    fontFamily: 'Manrope_400Regular',
+    color: COLORS.textSecondary,
   },
   macroRingContainer: {
     alignItems: 'center',

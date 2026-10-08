@@ -2,6 +2,7 @@ import type { Session } from '@supabase/supabase-js';
 import { create } from 'zustand';
 
 import { supabase } from '@/lib/supabase';
+import { useMealDraftStore } from '@/store/mealDraftStore';
 
 type SessionStatus = 'loading' | 'ready';
 
@@ -12,10 +13,13 @@ type SessionState = {
   setStatus: (status: SessionStatus) => void;
 };
 
-export const useSessionStore = create<SessionState>((set) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   session: null,
   status: 'loading',
-  setSession: (session) => set({ session }),
+  setSession: (session) => {
+    if (get().session?.user.id !== session?.user.id) useMealDraftStore.getState().reset();
+    set({ session });
+  },
   setStatus: (status) => set({ status }),
 }));
 
@@ -50,7 +54,8 @@ export const bootstrapSession = () => {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      useSessionStore.setState({ session: session ?? null, status: 'ready' });
+      useSessionStore.getState().setSession(session ?? null);
+      useSessionStore.setState({ status: 'ready' });
     });
 
     unsubscribe = () => subscription.unsubscribe();
@@ -60,6 +65,7 @@ export const bootstrapSession = () => {
 };
 
 export const cleanupSession = () => {
+  useMealDraftStore.getState().reset();
   unsubscribe?.();
   unsubscribe = null;
   bootstrapPromise = null;

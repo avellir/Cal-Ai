@@ -8,8 +8,30 @@ import {
 } from '@/lib/advanced-food-analysis-types';
 
 import { analyzeFoodImageAdvanced } from './advancedFoodAnalysis';
+import type { AddMealInput } from '@/lib/meal-log-types';
 
 export type SuccessfulAnalysisData = NonNullable<AdvancedAnalysisResult['data']>;
+
+export function getMealInputFromAnalysis(
+  data: SuccessfulAnalysisData,
+  quantity: number,
+  imageUri?: string | null,
+  metadata: Pick<AddMealInput, 'loggedAt' | 'mealType'> = {},
+): AddMealInput {
+  const servingSizeLabel = getAnalysisServingSizeLabel(data);
+  const { calories, protein, carbs, fat } = data.totalNutrition;
+
+  return {
+    name: getAnalysisDisplayName(data).trim() || 'Logged meal',
+    calories,
+    macros: { protein, carbs, fat },
+    quantity,
+    servingSizeLabel,
+    note: quantity !== 1 ? `${servingSizeLabel} (${quantity}×)` : servingSizeLabel,
+    imageUri: imageUri || null,
+    ...metadata,
+  };
+}
 
 export type FoodAnalysisIngredientView = {
   name: string;
@@ -55,10 +77,18 @@ export function isSuccessfulAnalysisData(value: unknown): value is SuccessfulAna
     typeof (data.totalNutrition as Record<string, unknown>).carbs === 'number' &&
     typeof (data.totalNutrition as Record<string, unknown>).fat === 'number' &&
     Array.isArray(data.ingredients) &&
-    data.ingredients.every(isEnrichedIngredient) &&
+    data.ingredients.every(ingredient =>
+      isEnrichedIngredient(ingredient) &&
+      (ingredient.wasAdjusted === undefined || typeof ingredient.wasAdjusted === 'boolean') &&
+      (ingredient.adjustmentReason === undefined || typeof ingredient.adjustmentReason === 'string')
+    ) &&
     Array.isArray(data.regions) &&
     data.regions.every(isFoodRegion) &&
-    typeof data.confidence === 'number'
+    typeof data.confidence === 'number' &&
+    (data.warnings === undefined ||
+      (Array.isArray(data.warnings) && data.warnings.every(warning => typeof warning === 'string'))) &&
+    (data.adjustments === undefined ||
+      (Array.isArray(data.adjustments) && data.adjustments.every(adjustment => typeof adjustment === 'string')))
   );
 }
 
@@ -110,6 +140,13 @@ export function getAnalysisServingSizeLabel(data: SuccessfulAnalysisData): strin
   }
 
   return '1 serving';
+}
+
+export function formatAnalysisQuantity(quantity: number, unit: string): string {
+  const amount = unit === 'g' || unit === 'ml'
+    ? Math.round(quantity)
+    : Number(quantity.toFixed(3));
+  return `${amount} ${unit}`;
 }
 
 export function getAnalysisIngredientViews(

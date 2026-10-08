@@ -3,8 +3,9 @@ import { AnimationDurations, BorderRadius, DesignColors, Layout, Spacing, Typogr
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useGoalFlow } from './GoalFlowContext';
+import { Animated, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { useGoalFlow } from '@/components/goal-flow/GoalFlowContext';
 
 export default function TargetWeightScreen() {
   const router = useRouter();

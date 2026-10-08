@@ -1,7 +1,8 @@
 import * as Haptics from 'expo-haptics';
 import { Apple, Pencil, Scale, type LucideIcon } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LineChart } from 'react-native-wagmi-charts';
@@ -322,7 +323,7 @@ export default function ProgressScreen() {
 
             {hasWeightData ? (
               <View style={styles.notePill}>
-                <Text style={styles.noteText}>Great job! Consistency is key, and you're mastering it!</Text>
+                <Text style={styles.noteText}>Great job! Consistency is key, and you&apos;re mastering it!</Text>
               </View>
             ) : null}
           </Animated.View>

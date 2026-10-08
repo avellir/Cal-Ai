@@ -4,8 +4,9 @@ import type { ActivityLevel, Sex } from '@/lib/user-goals-types';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useGoalFlow } from './GoalFlowContext';
+import { Animated, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { useGoalFlow } from '@/components/goal-flow/GoalFlowContext';
 
 const ACTIVITY_OPTIONS: {
   value: ActivityLevel;
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: Layout.padding,
+    paddingHorizontal: Layout.horizontalPadding,
     paddingTop: Spacing.xl,
     paddingBottom: Spacing.xl,
     gap: Spacing.xl,

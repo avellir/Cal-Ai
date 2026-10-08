@@ -2,13 +2,12 @@
  * Advanced Food Analysis Orchestrator
  * 
  * Coordinates the optimized food analysis pipeline:
- * 1. Combined Segmentation + Decomposition (Single Gemini API call)
+ * 1. Combined Segmentation + Decomposition (Single Azure API call)
  * 2. Edge Case Detection (no-food, packaged labels, beverages, etc.)
- * 3. Nutritional Lookup (FatSecret/USDA)
+ * 3. Nutritional Lookup (built-in reference estimates)
  * 4. Validation and Aggregation
  * 
- * Optimized for free-tier API usage: 1 API call per image,
- * with an optional layered-dish refinement pass when needed.
+ * One recognition call per image, plus optional topping refinement or label reading.
  */
 
 import {
@@ -21,8 +20,6 @@ import {
 import {
     detectEdgeCases,
     adjustBeverageUnits,
-    extractSingleIngredientName,
-    limitToTopIngredients,
     extractNutritionFromLabel
 } from './advancedFoodEdgeCases';
 import {
@@ -30,82 +27,13 @@ import {
     ErrorCategory,
     getUserFriendlyErrorMessage,
     withErrorHandling
-} from './advancedFoodErrorHandling'; // Check if these are exported (I believe most are)
+} from './advancedFoodErrorHandling';
 import { validateAdvancedAnalysis } from './advancedFoodValidation';
-import { lookupIngredientNutrition } from './fatSecretApi';
-import { runGeminiRequest } from './geminiService';
+import { lookupIngredientNutrition } from './localNutrition';
+import { runPhotoAnalysis, convertImageToBase64 } from './photoAnalysis';
 import { deduplicateIngredients } from './ingredientDeduplication';
 import { validatePortionSize } from './portionValidation';
-
-// ============================================================================
-// Prompts
-// ============================================================================
-
-/**
- * Combined Segmentation + Decomposition Prompt
- * Performs both food region identification AND ingredient breakdown in a single API call
- * Uses weight_grams directly for cleaner data flow
- */
-const COMBINED_ANALYSIS_PROMPT = `Analyze food image. Return MINIMAL JSON with nutritional breakdown.
-
-RULES:
-- Only include ingredients with confidence >= 40
-- Use conservative weight estimates (grams)
-- DO NOT infer hidden ingredients (oils, butter, salt) unless visually evident
-- Include structural components (bun, crust, bread) even if partially hidden
-- For layered foods (pizza, toast, flatbreads), list the base (dough/crust/bread) AND each visible topping as separate ingredients
-- Ensure visible meats, cheeses, and greens are listed as distinct ingredients when present
-- If a protein is visible but its exact type is unclear, use a generic label (e.g., "meat", "shredded meat", "deli meat")
-- Include visible garnishes like herbs or citrus (e.g., cilantro, parsley, basil, lime, lemon) as separate ingredients
-- Keep descriptions SHORT (1-3 words max)
-- Limit to MAX 10 ingredients per region
-
-PORTION GUIDE (grams):
-Proteins: chicken breast 120-150, steak 150-180, salmon 120-150, eggs 50 each
-Starches: rice/pasta cup 150, bread slice 30-35, pizza dough 250-300
-Dairy: mozzarella 80-120, cheese slice 20, yogurt dollop 25-40
-Vegetables: leafy greens 30-40, dense veg 60-80
-Small items: cherry tomato 10, olives 15-20, sauce 15-20, herbs 15
-
-OUTPUT FORMAT:
-{
-  "regions": [{
-    "description": "short description",
-    "dishName": "dish name",
-    "confidence": 0-100,
-    "boundingBox": {"ymin":0,"xmin":0,"ymax":1000,"xmax":1000},
-    "ingredients": [{"name":"ingredient","weight_grams":100,"confidence":80,"visual_evidence":"visible"}]
-  }],
-  "overallConfidence": 0-100,
-  "total_plate_weight_grams": 0,
-  "notes": ""
-}
-
-If no food detected, return empty regions array.`;
-
-/**
- * Layered-dish refinement prompt (pizza/flatbread/toast)
- * Used only when the combined analysis collapses toppings into a single ingredient.
- */
-const LAYERED_TOPPINGS_PROMPT = (dishLabel: string) => `Analyze this image and focus ONLY on the ${dishLabel}.
-It is a layered food (pizza/flatbread/toast). List the base (crust/dough/bread) AND each visible topping as separate ingredients.
-Do NOT return a generic ingredient like "pizza", "flatbread", or "toast".
-Include visible meats, cheeses, and greens as distinct items when present (e.g., prosciutto, arugula, parmesan).
-If a topping is visible but you are unsure of the exact name, use a generic label like "meat topping" or "leafy greens".
-If a protein is visible but its exact type is unclear, use a generic label (e.g., "meat topping").
-Include visible garnishes like herbs or citrus (e.g., basil, parsley, arugula, lemon, lime) as separate ingredients.
-Do NOT infer hidden ingredients (oils, butter, salt) unless visually evident.
-Use conservative weight estimates in grams.
-
-Return JSON:
-{
-  "ingredients": [
-    {"name":"ingredient","weight_grams":100,"confidence":80,"visual_evidence":"visible"}
-  ]
-}
-
-If you cannot see toppings, return an empty ingredients array.`;
-
+import { containsFoodPhrase, isBeverageName, normalizeFoodName } from './foodNames';
 
 // ============================================================================
 // Main Orchestrator
@@ -114,7 +42,7 @@ If you cannot see toppings, return an empty ingredients array.`;
 /**
  * Ingredient as returned by the new prompt (uses weight_grams directly)
  */
-type GeminiIngredient = {
+type VisionIngredient = {
     name: string;
     weight_grams: number;
     confidence: number;
@@ -123,34 +51,20 @@ type GeminiIngredient = {
 
 /**
  * Combined analysis result type (internal use)
- * Uses the new weight_grams format from Gemini
+ * Uses the new weight_grams format from Azure
  */
 type CombinedAnalysisResult = {
-    regions: Array<FoodRegion & {
+    regions: (FoodRegion & {
         dishName?: string;
-        ingredients: GeminiIngredient[];
-    }>;
+        ingredients: VisionIngredient[];
+    })[];
     overallConfidence: number;
     total_plate_weight_grams?: number;
     notes?: string;
 };
 
-const DEFAULT_GEMINI_TEMPERATURE = 0.1;
-const LAYERED_REFINEMENT_TEMPERATURE = 0.2;
 
-const BEVERAGE_KEYWORDS = [
-    'juice',
-    'soda',
-    'water',
-    'coffee',
-    'tea',
-    'milk',
-    'smoothie',
-    'shake',
-    'beer',
-    'wine',
-    'cocktail',
-];
+
 
 const LAYERED_DISH_KEYWORDS = [
     'pizza',
@@ -174,24 +88,22 @@ const GARNISH_KEYWORDS = [
 ];
 
 function isBeverageIngredient(name: string): boolean {
-    const nameLower = name.toLowerCase();
-    return BEVERAGE_KEYWORDS.some(keyword => nameLower.includes(keyword));
+    return isBeverageName(name);
 }
 
 function isGarnishIngredient(name: string): boolean {
-    const nameLower = name.toLowerCase();
-    return GARNISH_KEYWORDS.some(keyword => nameLower.includes(keyword));
+    return GARNISH_KEYWORDS.some(keyword => containsFoodPhrase(name, keyword));
 }
 
 function isLayeredDishRegion(description?: string, dishName?: string): boolean {
     const text = `${description ?? ''} ${dishName ?? ''}`.toLowerCase();
-    return LAYERED_DISH_KEYWORDS.some(keyword => text.includes(keyword));
+    return LAYERED_DISH_KEYWORDS.some(keyword => containsFoodPhrase(text, keyword));
 }
 
-function hasLayeredIngredient(ingredients: GeminiIngredient[] | undefined): boolean {
+function hasLayeredIngredient(ingredients: VisionIngredient[] | undefined): boolean {
     if (!ingredients) return false;
     return ingredients.some(ing =>
-        LAYERED_DISH_KEYWORDS.some(keyword => ing.name.toLowerCase().includes(keyword))
+        LAYERED_DISH_KEYWORDS.some(keyword => containsFoodPhrase(ing.name, keyword))
     );
 }
 
@@ -249,18 +161,11 @@ function normalizeBeverageQuantityMl(quantityMl: number): {
     reason: string;
 } {
     if (!Number.isFinite(quantityMl) || quantityMl <= 0) {
-        return {
-            adjustedQuantity: 250,
-            wasAdjusted: true,
-            confidencePenalty: 15,
-            reason: `Beverage volume was invalid (${quantityMl}). Defaulted to 250ml for stability.`,
-        };
+        throw new Error('Beverage quantity must be positive and finite.');
     }
 
-    // Keep this mild: clamp extremes and round to reduce jitter across runs.
-    const clamped = clamp(quantityMl, 30, 600);
-    const rounded = Math.round(clamped / 25) * 25;
-    const adjustedQuantity = clamp(rounded, 30, 600);
+    // Preserve the visible volume; only enforce the supported schema ceiling.
+    const adjustedQuantity = Math.min(quantityMl, 10000);
 
     const wasAdjusted = adjustedQuantity !== quantityMl;
     if (!wasAdjusted) {
@@ -281,17 +186,17 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
     try {
         // 0. Preparation
-        const imageBase64 = base64Image ?? await import('./geminiService').then(m => m.convertImageToBase64(imageUri));
+        const imageBase64 = base64Image ?? await convertImageToBase64(imageUri);
         if (!imageBase64) throw new Error("Failed to convert image to base64.");
-        const apiKey = process.env.EXPO_PUBLIC_GOOGLE_GEMINI_API_KEY!;
-        if (!apiKey) throw new Error("Google Gemini API key not configured.");
 
         // 1. Combined Segmentation + Decomposition (SINGLE API CALL)
         stagesCompleted.push('combined_analysis');
         const combinedResult = await withErrorHandling(
-            async () => performCombinedAnalysis(apiKey, imageBase64),
-            { stage: 'combined_analysis' }
+            async () => performCombinedAnalysis(imageBase64),
+            { stage: 'combined_analysis', maxRetries: 0 }
         );
+
+        if (combinedResult.notes) warnings.push(combinedResult.notes);
 
         // Extract segmentation-compatible data for edge case detection
         const segmentationData: SegmentationResult = {
@@ -332,10 +237,15 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             stagesCompleted.push('layered_refine');
             const region = combinedResult.regions[layeredCandidateIndex];
             const dishLabel = region.dishName || region.description || 'layered dish';
-            const refinedIngredients = await withErrorHandling(
-                async () => refineLayeredDishIngredients(apiKey, imageBase64, dishLabel),
-                { stage: 'layered_refine' }
-            );
+            let refinedIngredients: VisionIngredient[] = [];
+            try {
+                refinedIngredients = await withErrorHandling(
+                    async () => refineLayeredDishIngredients(imageBase64, dishLabel),
+                    { stage: 'layered_refine', maxRetries: 0 }
+                );
+            } catch {
+                warnings.push('Topping refinement was unavailable. Kept the original recognition; confirm the visible toppings.');
+            }
 
             const sanitizedRefined = refinedIngredients.filter(ing => !isGenericLayeredName(ing.name));
 
@@ -352,7 +262,14 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
         // 3. Extract flattened ingredients from combined result
         stagesCompleted.push('ingredient_extraction');
-        const rawIngredients = combinedResult.regions.flatMap(r => r.ingredients || []);
+        const rawIngredients = combinedResult.regions.flatMap((r, regionIndex) =>
+            (r.ingredients || []).map(ingredient => ({ ...ingredient, regionIndex }))
+        );
+        if (rawIngredients.some(ingredient => !ingredient.name?.trim() ||
+            !Number.isFinite(ingredient.weight_grams) || ingredient.weight_grams <= 0 ||
+            !Number.isFinite(ingredient.confidence) || ingredient.confidence < 0 || ingredient.confidence > 100)) {
+            throw new Error('Food analysis returned invalid ingredients. Please try another photo.');
+        }
         
         // 3.1 Filter out low-confidence ingredients (confidence < 40 per new prompt rules)
         const MIN_INGREDIENT_CONFIDENCE = 40;
@@ -383,9 +300,9 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         const HIDDEN_INGREDIENT_CONFIDENCE_THRESHOLD = 60;
         
         const filteredIngredients = flattenedIngredients.filter(ing => {
-            const nameLower = ing.name.toLowerCase();
+            const nameLower = normalizeFoodName(ing.name);
             const isHiddenIngredientType = HIDDEN_INGREDIENT_PATTERNS.some(pattern => 
-                nameLower.includes(pattern)
+                nameLower === pattern
             );
             
             if (isHiddenIngredientType && ing.confidence < HIDDEN_INGREDIENT_CONFIDENCE_THRESHOLD) {
@@ -398,40 +315,29 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             return true;
         });
 
+        const omittedNames = rawIngredients.filter(ingredient => !filteredIngredients.includes(ingredient))
+            .map(ingredient => ingredient.name);
+        if (omittedNames.length) {
+            warnings.push('Uncertain detections excluded: ' + [...new Set(omittedNames)].join(', ') +
+                '. Confirm visible foods before saving; the nutrition total may be incomplete.');
+        }
+
         // 3.3 Convert to canonical Ingredient shape for downstream processing
         let ingredientsForProcessing: Ingredient[] = filteredIngredients.map(ing => ({
             name: ing.name,
             quantity: ing.weight_grams,
             unit: 'g',
-            confidence: ing.confidence
+            confidence: ing.confidence,
+            regionIndex: ing.regionIndex,
         }));
 
-        // 3.4 Edge-case handling that affects ingredient stability
-        if (edgeCase?.type === 'single_ingredient' && segmentationData.regions.length === 1) {
-            stagesCompleted.push('single_ingredient_normalization');
-            const extractedName = extractSingleIngredientName(segmentationData.regions[0]);
-
-            const normalizedTarget = extractedName.toLowerCase();
-            const bestMatch =
-                ingredientsForProcessing.find(i => i.name.toLowerCase().includes(normalizedTarget) || normalizedTarget.includes(i.name.toLowerCase())) ??
-                [...ingredientsForProcessing].sort((a, b) => b.confidence - a.confidence)[0];
-
-            const fallbackQuantity =
-                (bestMatch?.quantity && Number.isFinite(bestMatch.quantity) ? bestMatch.quantity : undefined) ??
-                (combinedResult.total_plate_weight_grams && combinedResult.total_plate_weight_grams > 0 ? combinedResult.total_plate_weight_grams : undefined) ??
-                100;
-
-            ingredientsForProcessing = [
-                {
-                    name: extractedName,
-                    quantity: fallbackQuantity,
-                    unit: 'g',
-                    confidence: clamp(bestMatch?.confidence ?? segmentationData.overallConfidence, 0, 100),
-                }
-            ];
+        // Keep the structured ingredient names and weights; region captions are
+        // not a reason to replace a food or collapse several visible ingredients.
+        if (!ingredientsForProcessing.length) {
+            throw new Error('No food ingredients could be identified reliably. Please try a clearer photo.');
         }
 
-        // 3.5 Portion Validation - Adjust unrealistic portion estimates
+        // 3.5 Portion validation: preserve amounts and surface serving warnings.
         stagesCompleted.push('portion_validation');
         ingredientsForProcessing = ingredientsForProcessing.map(ing => {
             try {
@@ -456,6 +362,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 }
 
                 const validation = validatePortionSize(ing.name, ing.quantity, 'g');
+                if (validation.warning) warnings.push(validation.warning);
 
                 if (validation.wasAdjusted) {
                     console.log(
@@ -478,7 +385,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             }
         });
 
-        // 3.6 Deduplicate to avoid double-counting across regions / synonyms
+        // 3.6 Merge repeated labels within regions and add separate portions.
         stagesCompleted.push('dedupe');
         const dedupe = deduplicateIngredients(ingredientsForProcessing);
         ingredientsForProcessing = dedupe.uniqueIngredients;
@@ -486,14 +393,11 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             warnings.push(`Merged ${dedupe.mergedCount} duplicate ingredient(s) for consistency.`);
         }
 
-        // 3.7 Complex mixed dish: limit to most prominent ingredients
+        // Retain every reliable visible ingredient, including lower-volume fats
+        // and sauces that can materially change a mixed dish's nutrition.
         if (edgeCase?.type === 'complex_mixed_dish') {
-            stagesCompleted.push('complex_dish_limit');
-            const limited = limitToTopIngredients(ingredientsForProcessing, 5);
-            if (limited.length < ingredientsForProcessing.length) {
-                warnings.push('Complex dish detected: limited to top ingredients for consistency.');
-            }
-            ingredientsForProcessing = limited;
+            stagesCompleted.push('complex_dish_review');
+            warnings.push('Mixed dish: ingredients and portions are estimates. Confirm the visible ingredients and serving size.');
         }
 
         // 3.8 Normalize beverage units (e.g., milk/coffee) to volume where applicable
@@ -506,9 +410,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             const result = await lookupIngredientNutrition(ingredient);
             if (result) {
                 let finalConfidence = ingredient.confidence;
-                if (result.source !== 'fatsecret') {
-                    finalConfidence -= result.confidencePenalty;
-                }
+                finalConfidence -= result.confidencePenalty;
 
                 return {
                     ...ingredient,
@@ -592,107 +494,17 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 // ============================================================================
 
 /**
- * Attempts to repair truncated JSON by closing open brackets/braces
- * This handles cases where the API response was cut off mid-stream
- */
-function attemptJsonRepair(jsonStr: string): string {
-    let repaired = jsonStr.trim();
-    
-    // Fix malformed floating-point numbers (e.g., "308.447723388671944553..." with excessive decimals)
-    // These can occur when the model generates invalid numeric output
-    repaired = repaired.replace(/:\s*(\d+\.\d{10,})\d*/g, (match, num) => {
-        // Truncate to 6 decimal places max
-        const truncated = parseFloat(num).toFixed(6);
-        return `: ${parseFloat(truncated)}`;
-    });
-    
-    // Count open brackets/braces
-    let openBraces = 0;
-    let openBrackets = 0;
-    let inString = false;
-    let escapeNext = false;
-    
-    for (const char of repaired) {
-        if (escapeNext) {
-            escapeNext = false;
-            continue;
-        }
-        if (char === '\\') {
-            escapeNext = true;
-            continue;
-        }
-        if (char === '"') {
-            inString = !inString;
-            continue;
-        }
-        if (inString) continue;
-        
-        if (char === '{') openBraces++;
-        else if (char === '}') openBraces--;
-        else if (char === '[') openBrackets++;
-        else if (char === ']') openBrackets--;
-    }
-    
-    // If we're in a string, close it
-    if (inString) {
-        repaired += '"';
-    }
-    
-    // Remove trailing incomplete key-value pairs (e.g., `"key":` or `"key": `)
-    repaired = repaired.replace(/,?\s*"[^"]*":\s*$/, '');
-    
-    // Close any open brackets/braces
-    while (openBrackets > 0) {
-        repaired += ']';
-        openBrackets--;
-    }
-    while (openBraces > 0) {
-        repaired += '}';
-        openBraces--;
-    }
-    
-    return repaired;
-}
-
-/**
  * Refines ingredients for layered dishes (pizza/flatbread/toast) using a targeted prompt.
  * Returns a list of ingredients or an empty list if extraction fails.
  */
 async function refineLayeredDishIngredients(
-    apiKey: string,
     base64Image: string,
     dishLabel: string
-): Promise<GeminiIngredient[]> {
-    const response = await runGeminiRequest({
-        apiKey,
-        prompt: LAYERED_TOPPINGS_PROMPT(dishLabel),
-        base64Image,
-        temperature: LAYERED_REFINEMENT_TEMPERATURE,
-        maxOutputTokens: 2048,
-        responseSchema: {
-            type: "object",
-            properties: {
-                ingredients: {
-                    type: "array",
-                    minItems: 2,
-                    items: {
-                        type: "object",
-                        properties: {
-                            name: { type: "string" },
-                            weight_grams: { type: "number" },
-                            confidence: { type: "number" },
-                            visual_evidence: { type: "string" }
-                        },
-                        required: ["name", "weight_grams", "confidence"]
-                    }
-                }
-            },
-            required: ["ingredients"]
-        }
-    });
+): Promise<VisionIngredient[]> {
+    const response = await runPhotoAnalysis({ mode: 'refine', base64Image, dishLabel });
 
     try {
-        const parsed = JSON.parse(response) as { ingredients?: GeminiIngredient[] };
+        const parsed = JSON.parse(response) as { ingredients?: VisionIngredient[] };
         if (!parsed.ingredients || !Array.isArray(parsed.ingredients)) {
             return [];
         }
@@ -707,95 +519,13 @@ async function refineLayeredDishIngredients(
  * Performs combined segmentation and decomposition in a SINGLE API call
  * This reduces API usage by 50-75% compared to separate calls
  */
-async function performCombinedAnalysis(apiKey: string, base64Image: string): Promise<CombinedAnalysisResult> {
-    const temperature = DEFAULT_GEMINI_TEMPERATURE;
-
-    const response = await runGeminiRequest({
-        apiKey,
-        prompt: COMBINED_ANALYSIS_PROMPT,
-        base64Image,
-        temperature,
-        maxOutputTokens: 16384, // Increased from 8192 to handle complex meals
-        responseSchema: {
-            type: "object",
-            properties: {
-                regions: {
-                    type: "array",
-                    items: {
-                        type: "object",
-                        properties: {
-                            description: { type: "string" },
-                            dishName: { type: "string" },
-                            confidence: { type: "number" },
-                            boundingBox: {
-                                type: "object",
-                                properties: {
-                                    ymin: { type: "number" },
-                                    xmin: { type: "number" },
-                                    ymax: { type: "number" },
-                                    xmax: { type: "number" }
-                                }
-                            },
-                            ingredients: {
-                                type: "array",
-                                items: {
-                                    type: "object",
-                                    properties: {
-                                        name: { type: "string" },
-                                        weight_grams: { type: "number" },
-                                        confidence: { type: "number" },
-                                        visual_evidence: { type: "string" }
-                                    },
-                                    required: ["name", "weight_grams", "confidence"]
-                                }
-                            }
-                        },
-                        required: ["description", "confidence", "ingredients"]
-                    }
-                },
-                overallConfidence: { type: "number" },
-                total_plate_weight_grams: { type: "number" },
-                notes: { type: "string" }
-            },
-            required: ["regions", "overallConfidence"]
-        }
-    });
-
-    // Log raw response for debugging
-    console.log('[CombinedAnalysis] Raw response length:', response.length);
-    console.log('[CombinedAnalysis] Raw response preview:', response.substring(0, 500));
-    
-    // First attempt: parse as-is
-    try {
-        const parsed = JSON.parse(response);
-        
-        if (!parsed.regions || !Array.isArray(parsed.regions)) {
-            console.error('[CombinedAnalysis] Invalid response structure - missing regions array');
-            throw new Error("Invalid response: missing regions array");
-        }
-        
-        return parsed as CombinedAnalysisResult;
-    } catch (firstError) {
-        console.warn('[CombinedAnalysis] Initial parse failed, attempting JSON repair...');
-        
-        // Second attempt: try to repair truncated JSON
-        try {
-            const repairedJson = attemptJsonRepair(response);
-            console.log('[CombinedAnalysis] Repaired JSON length:', repairedJson.length);
-            
-            const parsed = JSON.parse(repairedJson);
-            
-            if (!parsed.regions || !Array.isArray(parsed.regions)) {
-                throw new Error("Invalid response: missing regions array after repair");
-            }
-            
-            console.log('[CombinedAnalysis] JSON repair successful!');
-            return parsed as CombinedAnalysisResult;
-        } catch (repairError) {
-            console.error('[CombinedAnalysis] Parse error:', firstError);
-            console.error('[CombinedAnalysis] Repair also failed:', repairError);
-            console.error('[CombinedAnalysis] Full response:', response);
-            throw new Error(`Failed to parse combined analysis result: ${firstError instanceof Error ? firstError.message : 'Unknown error'}`);
-        }
+async function performCombinedAnalysis(base64Image: string): Promise<CombinedAnalysisResult> {
+    const response = await runPhotoAnalysis({ mode: 'analyze', base64Image });
+    const parsed = JSON.parse(response) as CombinedAnalysisResult;
+    if (!parsed || !Array.isArray(parsed.regions) ||
+        !Number.isFinite(parsed.overallConfidence) || parsed.overallConfidence < 0 || parsed.overallConfidence > 100 ||
+        parsed.regions.some(region => typeof region.description !== 'string' || !Array.isArray(region.ingredients))) {
+        throw new Error('Invalid food recognition response. Please try another photo.');
     }
+    return parsed;
 }

@@ -7,29 +7,20 @@ import {
   Manrope_800ExtraBold,
   useFonts,
 } from '@expo-google-fonts/manrope';
-import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-const baseTextStyle = { fontFamily: 'Manrope_400Regular' };
-if (!Text.defaultProps) {
-  Text.defaultProps = {};
-}
-const defaultTextStyle = Text.defaultProps.style;
-Text.defaultProps.style = Array.isArray(defaultTextStyle)
-  ? [baseTextStyle, ...defaultTextStyle]
-  : [baseTextStyle, defaultTextStyle].filter(Boolean);
-
-
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export const unstable_settings = {
-  anchor: '(app)/(tabs)',
+  anchor: '(app)',
 };
 
 export default function RootLayout() {

@@ -1,4 +1,4 @@
-import { Platform, TextStyle, ViewStyle } from 'react-native';
+import { TextStyle, ViewStyle } from 'react-native';
 
 export const ThemeColors = {
   // Primary scale
@@ -30,29 +30,6 @@ export const ThemeColors = {
   textSecondary: '#3A3A3C',
   textTertiary: '#8E8E93',
   textInverse: '#FFFFFF',
-};
-
-const tintColorLight = ThemeColors.info;
-const tintColorDark = ThemeColors.primary50;
-
-// Legacy Colors (for backward compatibility)
-export const Colors = {
-  light: {
-    text: ThemeColors.textPrimary,
-    background: ThemeColors.backgroundPrimary,
-    tint: tintColorLight,
-    icon: ThemeColors.textTertiary,
-    tabIconDefault: ThemeColors.textTertiary,
-    tabIconSelected: tintColorLight,
-  },
-  dark: {
-    text: ThemeColors.textInverse,
-    background: ThemeColors.primary900,
-    tint: tintColorDark,
-    icon: ThemeColors.primary100,
-    tabIconDefault: ThemeColors.primary100,
-    tabIconSelected: tintColorDark,
-  },
 };
 
 // Design System Colors (mapped to new palette)
@@ -366,46 +343,6 @@ export const BorderRadius = {
   circle: 60,
 };
 
-// Component Styles
-export const ComponentStyles = {
-  primaryButton: {
-    borderRadius: BorderRadius.md,
-    backgroundColor: DesignColors.info,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  primaryButtonText: {
-    fontSize: 15,
-    fontFamily: fontForWeight('600'),
-    color: DesignColors.textInverse,
-  },
-  secondaryButton: {
-    borderRadius: BorderRadius.md,
-    backgroundColor: DesignColors.surface,
-    borderWidth: 1,
-    borderColor: DesignColors.gray200,
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontFamily: fontForWeight('600'),
-    color: DesignColors.textPrimary,
-  },
-  card: {
-    backgroundColor: DesignColors.surface,
-    borderRadius: BorderRadius.card,
-    padding: Spacing.card,
-    borderWidth: 1,
-    borderColor: DesignColors.gray200,
-    ...Shadows.sm,
-  },
-};
-
 // Animation Durations
 export const AnimationDurations = {
   fast: 200,
@@ -428,20 +365,3 @@ export const Layout = {
   buttonBorderRadius: 12,
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    sans: FontFamilies.regular,
-    serif: 'Georgia',
-    mono: 'Menlo',
-  },
-  android: {
-    sans: FontFamilies.regular,
-    serif: 'serif',
-    mono: 'monospace',
-  },
-  web: {
-    sans: FontFamilies.regular,
-    serif: 'Georgia, serif',
-    mono: 'monospace',
-  },
-});

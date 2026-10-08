@@ -1,316 +1,136 @@
-import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Droplet, Fish, Leaf } from 'lucide-react-native';
-import { useMemo, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  GestureResponderEvent,
-  Image,
-  LayoutChangeEvent,
-  PanResponder,
-  PanResponderGestureState,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { MacroStatCard } from '@/components/MacroStatCard';
-import { Badge } from '@/components/ui/Badge';
-import { Card } from '@/components/ui/Card';
-import { DesignColors, Spacing, Typography } from '@/constants/theme';
+import { Text } from '@/components/ui/Text';
+import { MealEditor } from '@/components/meal-log/MealEditor';
+import { DesignColors } from '@/constants/theme';
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
+import type { AddMealInput } from '@/lib/meal-log-types';
+import { getLocalDateKey } from '@/lib/mealDates';
+import { getLoggedAtForDate } from '@/services/mealValidation';
+import { useMealDraftStore } from '@/store/mealDraftStore';
 import {
   getAnalysisAdjustments,
   getAnalysisDisplayName,
   getAnalysisIngredientViews,
   getAnalysisServingSizeLabel,
-  getConfidenceMessage,
+  getMealInputFromAnalysis,
   isSuccessfulAnalysisData,
   type SuccessfulAnalysisData,
 } from '@/services/foodAnalysis';
-import { useUserGoalsStore } from '@/store/userGoalsStore';
 
-type IngredientData = {
-  name: string;
-  quantity: number;
-  unit: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
-  wasAdjusted?: boolean;
-  adjustmentReason?: string;
-};
-
-type MicronutrientData = {
-  saturatedFat?: number;
-  vitaminA?: number;
-  vitaminC?: number;
-  calcium?: number;
-  iron?: number;
-};
-
-// Portion presets for quick scaling
 const PORTION_PRESETS = [
   { label: '½', multiplier: 0.5 },
   { label: '1×', multiplier: 1 },
   { label: '1½', multiplier: 1.5 },
   { label: '2×', multiplier: 2 },
-];
+] as const;
 
-// Custom Slider component
-function CustomSlider({
-  value,
-  minimumValue,
-  maximumValue,
-  step,
-  onValueChange,
-}: {
-  value: number;
-  minimumValue: number;
-  maximumValue: number;
-  step: number;
-  onValueChange: (value: number) => void;
-}) {
-  const [sliderWidth, setSliderWidth] = useState(0);
-  const sliderRef = useRef<View>(null);
-
-  const percentage = (value - minimumValue) / (maximumValue - minimumValue);
-
-  const handleLayout = (event: LayoutChangeEvent) => {
-    setSliderWidth(event.nativeEvent.layout.width);
-  };
-
-  const calculateValue = (locationX: number) => {
-    const clampedX = Math.max(0, Math.min(locationX, sliderWidth));
-    const rawValue = minimumValue + (clampedX / sliderWidth) * (maximumValue - minimumValue);
-    const steppedValue = Math.round(rawValue / step) * step;
-    return Math.max(minimumValue, Math.min(maximumValue, steppedValue));
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt: GestureResponderEvent) => {
-        const newValue = calculateValue(evt.nativeEvent.locationX);
-        onValueChange(Number(newValue.toFixed(1)));
-      },
-      onPanResponderMove: (evt: GestureResponderEvent, gestureState: PanResponderGestureState) => {
-        const startX = percentage * sliderWidth;
-        const newX = startX + gestureState.dx;
-        const newValue = calculateValue(newX);
-        onValueChange(Number(newValue.toFixed(1)));
-      },
-    })
-  ).current;
-
-  return (
-    <View
-      ref={sliderRef}
-      style={sliderStyles.container}
-      onLayout={handleLayout}
-      {...panResponder.panHandlers}
-    >
-      <View style={sliderStyles.track}>
-        <View style={[sliderStyles.fill, { width: `${percentage * 100}%` }]} />
-      </View>
-      <View style={[sliderStyles.thumb, { left: `${percentage * 100}%` }]} />
-    </View>
-  );
+function formatAmount(value: number, unit: string): string {
+  const amount = unit === 'g' || unit === 'ml'
+    ? Math.round(value)
+    : Number(value.toFixed(1));
+  return `${amount} ${unit}`;
 }
 
-const sliderStyles = StyleSheet.create({
-  container: {
-    height: 40,
-    justifyContent: 'center',
-  },
-  track: {
-    height: 4,
-    backgroundColor: DesignColors.gray300,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: DesignColors.primary,
-  },
-  thumb: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: DesignColors.primary,
-    marginLeft: -12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-});
+function getSelectedServingLabel(label: string, multiplier: number): string {
+  const measuredServing = label.match(/^(\d+(?:\.\d+)?)(g|ml)$/);
+  if (measuredServing) {
+    return formatAmount(Number(measuredServing[1]) * multiplier, measuredServing[2]);
+  }
 
-// Micronutrient row component
-function MicronutrientRow({
-  label,
-  value,
-  unit,
-  dailyValue,
-  icon
-}: {
-  label: string;
-  value: number;
-  unit: string;
-  dailyValue?: number;
-  icon: string;
-}) {
-  const percentage = dailyValue ? Math.round((value / dailyValue) * 100) : null;
-  const isHigh = percentage !== null && percentage > 20;
-
-  return (
-    <View style={styles.microRow}>
-      <View style={styles.microLeft}>
-        <MaterialCommunityIcons name={icon as any} size={16} color={DesignColors.gray500} />
-        <Text style={styles.microLabel}>{label}</Text>
-      </View>
-      <View style={styles.microRight}>
-        <Text style={styles.microValue}>{Math.round(value)}{unit}</Text>
-        {percentage !== null && (
-          <View style={[styles.microDvBadge, isHigh ? styles.microDvBadgeHigh : undefined]}>
-            <Text style={[styles.microDvText, isHigh ? styles.microDvTextHigh : undefined]}>
-              {percentage}% DV
-            </Text>
-          </View>
-        )}
-      </View>
-    </View>
-  );
+  return multiplier === 1 ? label : `${label} × ${multiplier}`;
 }
 
 export default function FoodResultScreen() {
-  const params = useLocalSearchParams<{
-    analysisData?: string;
-    imageUri?: string;
-  }>();
-
+  const params = useLocalSearchParams<{ draftId?: string; analysisData?: string; imageUri?: string; date?: string }>();
   const session = useSessionStore((state) => state.session);
-  const addMeal = useMealLogStore((state) => state.addMeal);
-  const getDailyTargets = useUserGoalsStore((state) => state.getDailyTargets);
-  const dailyTargets = getDailyTargets();
-  const [isSaving, setIsSaving] = useState(false);
-  const [showBreakdown, setShowBreakdown] = useState(false);
-  const [showMicros, setShowMicros] = useState(false);
-  const [portionMultiplier, setPortionMultiplier] = useState(1);
+  const draft = useMealDraftStore(state => state.ownerId === session?.user.id && params.draftId ? state.drafts[params.draftId] : undefined);
 
   const analysisData = useMemo<SuccessfulAnalysisData | null>(() => {
-    if (!params.analysisData) {
-      return null;
-    }
+    if (params.draftId) return draft?.originalAnalysis?.data ?? null;
+    if (!params.analysisData) return null;
 
     try {
-      const parsed = JSON.parse(params.analysisData);
+      const parsed: unknown = JSON.parse(params.analysisData);
       return isSuccessfulAnalysisData(parsed) ? parsed : null;
     } catch {
       return null;
     }
-  }, [params.analysisData]);
-
-  const ingredients: IngredientData[] = useMemo(
-    () => (analysisData ? getAnalysisIngredientViews(analysisData) : []),
-    [analysisData]
-  );
-  const adjustments = useMemo(
-    () => (analysisData ? getAnalysisAdjustments(analysisData) : []),
-    [analysisData]
-  );
-  const warnings = analysisData?.warnings ?? [];
-  const micronutrients: MicronutrientData = {};
-
-  const foodName = analysisData ? getAnalysisDisplayName(analysisData) : 'Food Analysis';
-  const servingSizeLabel = analysisData ? getAnalysisServingSizeLabel(analysisData) : '1 serving';
-  const confidence = analysisData ? Math.round(analysisData.confidence) : 0;
-  const baseCalories = analysisData?.totalNutrition.calories ?? 0;
-  const baseProtein = analysisData?.totalNutrition.protein ?? 0;
-  const baseCarbs = analysisData?.totalNutrition.carbs ?? 0;
-  const baseFat = analysisData?.totalNutrition.fat ?? 0;
-
-  // Scaled values based on portion multiplier
-  const scaled = useMemo(() => ({
-    calories: Math.round(baseCalories * portionMultiplier),
-    protein: baseProtein * portionMultiplier,
-    carbs: baseCarbs * portionMultiplier,
-    fat: baseFat * portionMultiplier,
-    saturatedFat: (micronutrients.saturatedFat || 0) * portionMultiplier,
-  }), [portionMultiplier, baseCalories, baseProtein, baseCarbs, baseFat, micronutrients]);
-
-  // Calculate macro percentages
-  const totalMacroCalories = (scaled.protein * 4) + (scaled.carbs * 4) + (scaled.fat * 9);
-  const macroPercentages = useMemo(() => ({
-    protein: totalMacroCalories > 0 ? Math.round((scaled.protein * 4 / totalMacroCalories) * 100) : 0,
-    carbs: totalMacroCalories > 0 ? Math.round((scaled.carbs * 4 / totalMacroCalories) * 100) : 0,
-    fat: totalMacroCalories > 0 ? Math.round((scaled.fat * 9 / totalMacroCalories) * 100) : 0,
-  }), [scaled, totalMacroCalories]);
-
-  const macroCards = [
-    {
-      key: 'protein' as const,
-      label: 'Protein',
-      value: scaled.protein,
-      percent: macroPercentages.protein,
-      color: DesignColors.protein,
-      Icon: Fish,
-    },
-    {
-      key: 'carbs' as const,
-      label: 'Carbs',
-      value: scaled.carbs,
-      percent: macroPercentages.carbs,
-      color: DesignColors.carbs,
-      Icon: Leaf,
-    },
-    {
-      key: 'fat' as const,
-      label: 'Fat',
-      value: scaled.fat,
-      percent: macroPercentages.fat,
-      color: DesignColors.fat,
-      Icon: Droplet,
-    },
-  ];
-
-  const hasMicronutrients = scaled.saturatedFat > 0;
-  const hasAdjustedIngredients = ingredients.some(ing => ing.wasAdjusted);
-  const confidenceMessage = getConfidenceMessage(confidence);
+  }, [params.draftId, params.analysisData, draft]);
 
   if (!analysisData) {
     return (
-      <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
         <View style={styles.header}>
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
             onPress={() => router.back()}
-            style={({ pressed }) => [
-              styles.backButton,
-              pressed && styles.backButtonPressed,
-            ]}>
-            <Feather name="arrow-left" size={24} color={DesignColors.black} />
+            style={styles.backButton}>
+            <Feather name="arrow-left" size={23} color={DesignColors.black} />
           </Pressable>
-          <Text style={styles.title}>Food Analysis</Text>
-          <View style={{ width: 40 }} />
+          <Text style={styles.headerTitle}>Review meal</Text>
+          <View style={styles.headerSpacer} />
         </View>
         <View style={styles.emptyState}>
-          <Text style={styles.emptyStateTitle}>Analysis data unavailable</Text>
-          <Text style={styles.emptyStateText}>
-            This result could not be restored. Please run the scan again.
-          </Text>
+          <Text style={styles.emptyTitle}>Result unavailable</Text>
+          <Text style={styles.emptyDescription}>Please scan your meal again.</Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  const initialInput = draft?.input ?? getMealInputFromAnalysis(analysisData, 1, params.imageUri, { loggedAt: getLoggedAtForDate(params.date) });
+  return <MealReview key={params.draftId ?? params.analysisData} analysisData={analysisData} initialInput={initialInput} draftId={params.draftId} />;
+}
+
+function MealReview({ analysisData, initialInput, draftId }: { analysisData: SuccessfulAnalysisData; initialInput: AddMealInput; draftId?: string }) {
+  const session = useSessionStore(state => state.session);
+  const addMeal = useMealLogStore(state => state.addMeal);
+  const [mealInput, setMealInput] = useState(initialInput);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showIngredients, setShowIngredients] = useState(false);
+  const [showEstimateDetails, setShowEstimateDetails] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const ingredients = getAnalysisIngredientViews(analysisData);
+  const adjustments = getAnalysisAdjustments(analysisData);
+  const portionMultiplier = mealInput.quantity ?? 1;
+  const imageUri = mealInput.imageUri;
+  const nutritionEdited = mealInput.calories !== analysisData.totalNutrition.calories ||
+    mealInput.macros.protein !== analysisData.totalNutrition.protein || mealInput.macros.carbs !== analysisData.totalNutrition.carbs ||
+    mealInput.macros.fat !== analysisData.totalNutrition.fat;
+
+  const updateInput = (input: AddMealInput) => {
+    if (draftId && (!session?.user.id || !useMealDraftStore.getState().updateDraft(session.user.id, draftId, input))) {
+      Alert.alert('Result unavailable', 'Please scan your meal again.');
+      return;
+    }
+    setMealInput(input);
+    setIsEditing(false);
+  };
+
+  const foodName = mealInput.name.trim() || getAnalysisDisplayName(analysisData).trim() || 'Your meal';
+  const displayName = foodName.charAt(0).toUpperCase() + foodName.slice(1);
+  const servingLabel = getSelectedServingLabel(
+    getAnalysisServingSizeLabel(analysisData),
+    portionMultiplier
+  );
+  const nutrition = { calories: mealInput.calories, ...mealInput.macros };
+  const calories = Math.round(nutrition.calories * portionMultiplier);
+  const protein = Math.round(nutrition.protein * portionMultiplier);
+  const carbs = Math.round(nutrition.carbs * portionMultiplier);
+  const fat = Math.round(nutrition.fat * portionMultiplier);
+  const confidence = Math.round(analysisData.confidence);
+  const lowConfidence = confidence < 50;
+  const warnings = analysisData.warnings ?? [];
+  const genericIngredients = ingredients
+    .filter((ingredient) => ingredient.source === 'generic')
+    .map((ingredient) => ingredient.name);
 
   const handleSave = async () => {
     if (isSaving) return;
@@ -322,26 +142,17 @@ export default function FoodResultScreen() {
     }
 
     setIsSaving(true);
-
     try {
-      await addMeal(userId, {
-        name: foodName.trim() || 'Logged meal',
-        // Store base nutrition; the meal service applies quantity when reading.
-        calories: baseCalories,
-        macros: {
-          protein: baseProtein,
-          carbs: baseCarbs,
-          fat: baseFat,
-        },
-        note: portionMultiplier !== 1
-          ? `${servingSizeLabel} (${portionMultiplier}×)`
-          : servingSizeLabel,
-        servingSizeLabel,
-        quantity: portionMultiplier,
-        imageUri: params.imageUri || null,
+      const base = getMealInputFromAnalysis(analysisData, portionMultiplier, imageUri, {
+        loggedAt: mealInput.loggedAt, mealType: mealInput.mealType,
       });
-
-      router.replace('/(app)/(tabs)');
+      await addMeal(userId, {
+        ...base, name: mealInput.name, calories: mealInput.calories, macros: mealInput.macros,
+        note: nutritionEdited ? `${base.note} · Nutrition edited by you` : base.note,
+      });
+      if (useSessionStore.getState().session?.user.id !== userId) return;
+      if (draftId) useMealDraftStore.getState().discardDraft(userId, draftId);
+      router.replace({ pathname: '/(app)/(tabs)', params: { date: getLocalDateKey(new Date(mealInput.loggedAt!)) } });
     } catch (error) {
       console.error('Failed to save meal', error);
       Alert.alert('Unable to save meal', 'Please try again in a moment.');
@@ -351,840 +162,381 @@ export default function FoodResultScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top', 'bottom', 'left', 'right']}>
       <View style={styles.header}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
           onPress={() => router.back()}
-          style={({ pressed }) => [
-            styles.backButton,
-            pressed && styles.backButtonPressed,
-          ]}>
-          <Feather name="arrow-left" size={24} color={DesignColors.black} />
+          style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}>
+          <Feather name="arrow-left" size={23} color={DesignColors.black} />
         </Pressable>
-        <Text style={styles.title}>Food Analysis</Text>
-        <View style={{ width: 40 }} />
+        <Text style={styles.headerTitle}>Review meal</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
-
-        {/* Food Image */}
-        {params.imageUri && (
-          <View style={styles.imageContainer}>
-            <Image source={{ uri: params.imageUri }} style={styles.foodImage} />
-            <View style={styles.imageOverlay}>
-              <Badge
-                label={`Confidence ${confidence}%`}
-                tone={confidence >= 75 ? 'success' : confidence >= 50 ? 'info' : 'warning'}
-              />
-            </View>
-          </View>
-        )}
-
-        {/* Food Name & Serving */}
-        <View style={styles.nameSection}>
-          <Text style={styles.foodName}>{foodName}</Text>
-          <Text style={styles.servingSize}>{servingSizeLabel}</Text>
-        </View>
-
-        {/* Hero calories */}
-        <View style={styles.heroCalories}>
-          <Text style={styles.overline}>Total</Text>
-          <Text style={styles.caloriesValue}>{scaled.calories}</Text>
-          <Text style={styles.caloriesLabel}>Calories</Text>
-          {portionMultiplier !== 1 && (
-            <Text style={styles.caloriesOriginal}>
-              Base: {baseCalories} cal
-            </Text>
-          )}
-        </View>
-
-        {/* Portion + macros + calories stack */}
-        <Card style={styles.stackCard} elevation="md">
-          <Text style={styles.sectionTitle}>Portion & macros</Text>
-          
-          {/* Grouped portion controls */}
-          <View style={styles.portionControlGroup}>
-            <View style={styles.portionButtons}>
-              {PORTION_PRESETS.map((preset) => (
-                <Pressable
-                  key={preset.label}
-                  style={({ pressed }) => [
-                    styles.portionButton,
-                    portionMultiplier === preset.multiplier && styles.portionButtonActive,
-                    pressed && styles.portionButtonPressed,
-                  ]}
-                  onPress={() => setPortionMultiplier(preset.multiplier)}>
-                  {({ pressed }) => (
-                    <Text style={[
-                      styles.portionButtonText,
-                      portionMultiplier === preset.multiplier && styles.portionButtonTextActive,
-                      pressed && !portionMultiplier && styles.portionButtonTextPressed,
-                    ]}>
-                      {preset.label}
-                    </Text>
-                  )}
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.sliderContainer}>
-              <View style={styles.sliderRow}>
-                <Text style={styles.sliderLabel}>Fine-tune</Text>
-                <Text style={styles.sliderValue}>{portionMultiplier.toFixed(1)}×</Text>
-              </View>
-              <CustomSlider
-                minimumValue={0.5}
-                maximumValue={2}
-                step={0.1}
-                value={portionMultiplier}
-                onValueChange={(value: number) => setPortionMultiplier(value)}
-              />
-            </View>
-          </View>
-
-          <View style={styles.macrosGrid}>
-            {macroCards.map((macro) => (
-              <MacroStatCard
-                key={macro.key}
-                label={macro.label}
-                value={macro.value}
-                percent={macro.percent}
-                color={macro.color}
-                Icon={macro.Icon}
-              />
-            ))}
-          </View>
-
-          {/* Confidence/Warning Banners - grouped under macros */}
-          <View style={styles.confidenceWarningGroup}>
-            {/* Confidence Message */}
-            <View style={[
-              styles.confidenceBanner,
-              confidence >= 75 && styles.confidenceBannerHigh,
-              confidence >= 50 && confidence < 75 && styles.confidenceBannerMedium,
-              confidence < 50 && styles.confidenceBannerLow,
-            ]}>
-              <Feather
-                name={confidence >= 75 ? 'check-circle' : confidence >= 50 ? 'info' : 'alert-circle'}
-                size={16}
-                color={confidence >= 75 ? DesignColors.successDark : confidence >= 50 ? DesignColors.warningDark : DesignColors.error}
-              />
-              <Text style={[
-                styles.confidenceText,
-                confidence >= 75 && styles.confidenceTextHigh,
-                confidence >= 50 && confidence < 75 && styles.confidenceTextMedium,
-                confidence < 50 && styles.confidenceTextLow,
-              ]}>
-                {confidenceMessage}
-              </Text>
-            </View>
-
-            {/* Warnings */}
-            {warnings.length > 0 && (
-              <View style={styles.warningBanner}>
-                <View style={styles.warningHeader}>
-                  <Feather name="alert-triangle" size={16} color={DesignColors.warningDark} />
-                  <Text style={styles.warningTitle}>Important Notes</Text>
-                </View>
-                {warnings.map((warning, index) => (
-                  <Text key={index} style={styles.warningText}>• {warning}</Text>
-                ))}
-              </View>
-            )}
-          </View>
-        </Card>
-
-        {/* Impact on Today */}
-        {dailyTargets ? (
-          <Card style={styles.impactCard} elevation="sm">
-            <View style={styles.impactHeader}>
-              <Text style={styles.sectionTitle}>Impact on today</Text>
-              <Badge label="Goals" tone="info" />
-            </View>
-            <View style={styles.impactRow}>
-              <Text style={styles.impactLabel}>Calories left</Text>
-              <Text style={styles.impactValue}>
-                {Math.max(0, dailyTargets.calories - scaled.calories)} cal
-              </Text>
-            </View>
-            <View style={styles.impactRow}>
-              <Text style={styles.impactLabel}>Protein</Text>
-              <Text style={styles.impactValue}>
-                {Math.max(0, dailyTargets.protein - scaled.protein).toFixed(0)} g
-              </Text>
-            </View>
-            <View style={styles.impactRow}>
-              <Text style={styles.impactLabel}>Carbs</Text>
-              <Text style={styles.impactValue}>
-                {Math.max(0, dailyTargets.carbs - scaled.carbs).toFixed(0)} g
-              </Text>
-            </View>
-            <View style={styles.impactRow}>
-              <Text style={styles.impactLabel}>Fat</Text>
-              <Text style={styles.impactValue}>
-                {Math.max(0, dailyTargets.fat - scaled.fat).toFixed(0)} g
-              </Text>
-            </View>
-          </Card>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={styles.foodImage} />
         ) : null}
 
-        {/* Micronutrients Section - Only Saturated Fat */}
-        {hasMicronutrients && (
-          <View style={styles.collapsibleSection}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.collapsibleHeader,
-                pressed && styles.collapsibleHeaderPressed,
-              ]}
-              onPress={() => setShowMicros(!showMicros)}>
-              <View style={styles.collapsibleHeaderLeft}>
-                <MaterialCommunityIcons name="nutrition" size={20} color={DesignColors.black} />
-                <Text style={styles.collapsibleTitle}>Micronutrients</Text>
-              </View>
-              <Feather name={showMicros ? 'chevron-up' : 'chevron-down'} size={20} color={DesignColors.gray500} />
-            </Pressable>
-
-            {showMicros && (
-              <View style={styles.microsList}>
-                {scaled.saturatedFat > 0 && (
-                  <MicronutrientRow label="Saturated Fat" value={scaled.saturatedFat} unit="g" dailyValue={20} icon="water-outline" />
-                )}
-              </View>
-            )}
+        <View style={styles.summary}>
+          <View style={styles.estimateTag}>
+            <Feather name="camera" size={14} color={DesignColors.gray700} />
+            <Text style={styles.estimateTagText}>{nutritionEdited ? 'Nutrition edited by you' : 'Estimated from photo'}</Text>
           </View>
-        )}
-
-        {/* Adjustments Section */}
-        {(adjustments.length > 0 || hasAdjustedIngredients) && (
-          <View style={styles.adjustmentsSection}>
-            <View style={styles.adjustmentsHeader}>
-              <Feather name="edit-3" size={16} color={DesignColors.gray500} />
-              <Text style={styles.adjustmentsTitle}>
-                {adjustments.length} adjustment{adjustments.length !== 1 ? 's' : ''} applied
-              </Text>
-            </View>
-            <Text style={styles.adjustmentsHint}>
-              Portions were validated against typical serving sizes
-            </Text>
+          <Text style={styles.foodName}>{displayName}</Text>
+          <Text style={styles.servingText}>Estimated portion: {servingLabel}</Text>
+          <Text style={styles.servingText}>
+            {(mealInput.mealType ?? 'snack').toUpperCase()} · {new Date(mealInput.loggedAt!).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+          </Text>
+          <Pressable accessibilityRole="button" onPress={() => setIsEditing(true)} disabled={isSaving} style={styles.editButton}>
+            <Feather name="edit-2" size={16} color={DesignColors.primary} />
+            <Text style={styles.editText}>Edit meal details</Text>
+          </Pressable>
+          <View style={styles.calorieRow}>
+            <Text style={styles.calorieNumber}>≈ {calories}</Text>
+            <Text style={styles.calorieUnit}>calories</Text>
           </View>
-        )}
+        </View>
 
-        {/* Ingredient Breakdown */}
-        {ingredients.length > 0 && (
-          <View style={styles.collapsibleSection}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.collapsibleHeader,
-                pressed && styles.collapsibleHeaderPressed,
-              ]}
-              onPress={() => setShowBreakdown(!showBreakdown)}>
-              <View style={styles.collapsibleHeaderLeft}>
-                <Feather name="list" size={20} color={DesignColors.black} />
-                <Text style={styles.collapsibleTitle}>
-                  Ingredients ({ingredients.length})
-                </Text>
-              </View>
-              <Feather name={showBreakdown ? 'chevron-up' : 'chevron-down'} size={20} color={DesignColors.gray500} />
-            </Pressable>
-
-            {showBreakdown && (
-              <View style={styles.ingredientsList}>
-                {ingredients.map((ingredient, index) => (
-                  <View key={index} style={[
-                    styles.ingredientItem,
-                    ingredient.wasAdjusted && styles.ingredientItemAdjusted
+        <View style={styles.portionCard}>
+          <View style={styles.sectionHeadingRow}>
+            <Text style={styles.sectionTitle}>Portion</Text>
+            <Text style={styles.sectionHint}>Adjust if needed</Text>
+          </View>
+          <View style={styles.portionButtons}>
+            {PORTION_PRESETS.map((preset) => {
+              const selected = portionMultiplier === preset.multiplier;
+              return (
+                <Pressable
+                  key={preset.multiplier}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${preset.multiplier} times the estimated portion`}
+                  accessibilityState={{ selected }}
+                  onPress={() => updateInput({ ...mealInput, quantity: preset.multiplier })}
+                  disabled={isSaving}
+                  style={({ pressed }) => [
+                    styles.portionButton,
+                    selected && styles.portionButtonSelected,
+                    pressed && styles.pressed,
                   ]}>
-                    <View style={styles.ingredientHeader}>
-                      <View style={styles.ingredientNameRow}>
-                        <Text style={styles.ingredientName}>{ingredient.name}</Text>
-                        {ingredient.wasAdjusted && (
-                          <View style={styles.adjustedBadge}>
-                            <Text style={styles.adjustedBadgeText}>Adjusted</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={styles.ingredientQty}>
-                        {Math.round(ingredient.quantity * portionMultiplier)}{ingredient.unit}
+                  <Text style={[styles.portionButtonText, selected && styles.portionButtonTextSelected]}>
+                    {preset.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          <View style={styles.macroDivider} />
+          <View style={styles.macroRow}>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.proteinDot]} />
+              <Text style={styles.macroLabel}>Protein</Text>
+              <Text style={styles.macroValue}>{protein} g</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.carbsDot]} />
+              <Text style={styles.macroLabel}>Carbs</Text>
+              <Text style={styles.macroValue}>{carbs} g</Text>
+            </View>
+            <View style={styles.macroItem}>
+              <View style={[styles.macroDot, styles.fatDot]} />
+              <Text style={styles.macroLabel}>Fat</Text>
+              <Text style={styles.macroValue}>{fat} g</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={[
+          styles.reviewNote,
+          (lowConfidence || genericIngredients.length > 0) && styles.reviewNoteAttention,
+        ]}>
+          <Feather
+            name={lowConfidence || genericIngredients.length > 0 ? 'alert-circle' : 'info'}
+            size={17}
+            color={lowConfidence || genericIngredients.length > 0
+              ? DesignColors.warningDark
+              : DesignColors.gray700}
+          />
+          <Text style={styles.reviewNoteText}>
+            {genericIngredients.length > 0
+              ? `Nutrition for ${genericIngredients.slice(0, 2).join(', ')}${genericIngredients.length > 2 ? ' and others' : ''} uses a rough estimate. Check before saving.`
+              : lowConfidence
+              ? 'The food was hard to identify. Retake the photo if this looks wrong.'
+              : 'Photo estimates can miss ingredients or cooking oil. Check the portion before saving.'}
+          </Text>
+        </View>
+
+        {ingredients.length > 0 ? (
+          <View style={styles.detailSection}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ expanded: showIngredients }}
+              onPress={() => setShowIngredients((current) => !current)}
+              style={({ pressed }) => [styles.detailButton, pressed && styles.pressed]}>
+              <View style={styles.detailTitleRow}>
+                <Feather name="list" size={18} color={DesignColors.black} />
+                <Text style={styles.detailTitle}>Ingredients</Text>
+                <Text style={styles.detailCount}>{ingredients.length}</Text>
+              </View>
+              <Feather
+                name={showIngredients ? 'chevron-up' : 'chevron-down'}
+                size={20}
+                color={DesignColors.gray600}
+              />
+            </Pressable>
+            {showIngredients ? (
+              <View style={styles.detailBody}>
+                {nutritionEdited ? <Text style={styles.detailText}>Ingredients describe the original estimate. Your edited nutrition is used for the meal total.</Text> : null}
+                {ingredients.map((ingredient, index) => (
+                  <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
+                    <View style={styles.ingredientInfo}>
+                      <Text style={styles.ingredientName}>{ingredient.name}</Text>
+                      <Text style={styles.ingredientAmount}>
+                        {formatAmount(ingredient.quantity * portionMultiplier, ingredient.unit)}
                       </Text>
                     </View>
-                    {ingredient.wasAdjusted && ingredient.adjustmentReason && (
-                      <Text style={styles.adjustmentReason}>{ingredient.adjustmentReason}</Text>
-                    )}
-                    <View style={styles.ingredientNutrition}>
-                      <Text style={styles.ingredientCal}>
-                        {Math.round(ingredient.calories * portionMultiplier)} cal
-                      </Text>
-                      <Text style={styles.ingredientMacro}>
-                        P: {Math.round(ingredient.protein * portionMultiplier)}g
-                      </Text>
-                      <Text style={styles.ingredientMacro}>
-                        C: {Math.round(ingredient.carbs * portionMultiplier)}g
-                      </Text>
-                      <Text style={styles.ingredientMacro}>
-                        F: {Math.round(ingredient.fat * portionMultiplier)}g
-                      </Text>
-                    </View>
+                    <Text style={styles.ingredientCalories}>
+                      {Math.round(ingredient.calories * portionMultiplier)} cal
+                    </Text>
                   </View>
                 ))}
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
+
+        <View style={styles.detailSection}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showEstimateDetails }}
+            onPress={() => setShowEstimateDetails((current) => !current)}
+            style={({ pressed }) => [styles.detailButton, pressed && styles.pressed]}>
+            <View style={styles.detailTitleRow}>
+              <Feather name="help-circle" size={18} color={DesignColors.black} />
+              <Text style={styles.detailTitle}>About this estimate</Text>
+            </View>
+            <Feather
+              name={showEstimateDetails ? 'chevron-up' : 'chevron-down'}
+              size={20}
+              color={DesignColors.gray600}
+            />
+          </Pressable>
+          {showEstimateDetails ? (
+            <View style={styles.detailBody}>
+              <Text style={styles.detailText}>
+                Original analysis confidence: {confidence}%. This is not a measure of calorie accuracy.
+              </Text>
+              {warnings.map((warning, index) => (
+                <Text key={`warning-${index}`} style={styles.detailText}>• {warning}</Text>
+              ))}
+              {adjustments.map((adjustment, index) => (
+                <Text key={`adjustment-${index}`} style={styles.detailText}>• {adjustment}</Text>
+              ))}
+            </View>
+          ) : null}
+        </View>
       </ScrollView>
 
-      {/* Footer Actions */}
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [
-            styles.retakeButton,
-            pressed && styles.retakeButtonPressed,
-          ]}
-          onPress={() => router.back()}>
-          <Feather name="camera" size={20} color={DesignColors.gray500} />
+          accessibilityRole="button"
+          onPress={() => router.back()}
+          style={({ pressed }) => [styles.retakeButton, pressed && styles.pressed]}>
+          <Feather name="camera" size={19} color={DesignColors.black} />
           <Text style={styles.retakeText}>Retake</Text>
         </Pressable>
-
         <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isSaving }}
+          onPress={handleSave}
+          disabled={isSaving}
           style={({ pressed }) => [
             styles.saveButton,
             isSaving && styles.saveButtonDisabled,
-            pressed && !isSaving && styles.saveButtonPressed,
-          ]}
-          onPress={handleSave}
-          disabled={isSaving}>
+            pressed && !isSaving && styles.pressed,
+          ]}>
           {isSaving ? (
             <ActivityIndicator size="small" color={DesignColors.white} />
           ) : (
-            <>
-              <Text style={styles.saveText}>Save to Log</Text>
-              <Feather name="check" size={20} color={DesignColors.white} />
-            </>
+            <Text style={styles.saveText}>Save meal</Text>
           )}
         </Pressable>
       </View>
+      {isEditing ? (
+        <Modal visible animationType="slide" onRequestClose={() => setIsEditing(false)}>
+          <SafeAreaView style={styles.editorContainer} edges={['top', 'bottom', 'left', 'right']}>
+            <MealEditor initialInput={mealInput} onSubmit={updateInput} onCancel={() => setIsEditing(false)} />
+          </SafeAreaView>
+        </Modal>
+      ) : null}
     </SafeAreaView>
   );
 }
 
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DesignColors.white,
-  },
-  emptyState: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 8,
-  },
-  emptyStateTitle: {
-    fontSize: 22,
-    fontFamily: 'Manrope_700Bold',
-    color: DesignColors.black,
-    textAlign: 'center',
-  },
-  emptyStateText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: DesignColors.gray500,
-    textAlign: 'center',
-  },
+  container: { flex: 1, backgroundColor: DesignColors.white },
+  editorContainer: { flex: 1, backgroundColor: DesignColors.white },
+  editButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'flex-start' },
+  editText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', color: DesignColors.primary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: DesignColors.gray100,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  backButtonPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.95 }],
-  },
-  title: {
-    fontSize: 18,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 16,
-  },
-  imageContainer: {
-    width: '100%',
-    height: 200,
-    borderRadius: 20,
-    overflow: 'hidden',
     backgroundColor: DesignColors.gray100,
   },
+  headerTitle: { fontSize: 18, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  headerSpacer: { width: 44 },
+  content: { flex: 1 },
+  contentContainer: { paddingHorizontal: 20, paddingBottom: 24, gap: 18 },
   foodImage: {
     width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
+    height: 190,
+    borderRadius: 20,
+    backgroundColor: DesignColors.gray100,
   },
-  imageOverlay: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-  },
-  nameSection: {
-    gap: 4,
-  },
-  foodName: {
-    fontSize: 24,
-    fontFamily: 'Manrope_700Bold',
-    color: DesignColors.black,
-  },
-  servingSize: {
-    fontSize: 15,
-    color: DesignColors.gray500,
-  },
-  portionSection: {
-    backgroundColor: DesignColors.gray50,
-    borderRadius: 16,
-    padding: 16,
-    gap: Spacing.md,
-  },
-  portionLabel: {
-    fontSize: 13,
-    fontFamily: 'Manrope_500Medium',
-    color: DesignColors.gray500,
-    marginBottom: 10,
-  },
-  portionControlGroup: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 16,
-  },
-  portionButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 4,
-  },
-  sliderContainer: {
-    gap: 4,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  portionButton: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    backgroundColor: DesignColors.white,
-    borderWidth: 1,
-    borderColor: DesignColors.gray200,
-    alignItems: 'center',
-  },
-  portionButtonActive: {
-    backgroundColor: DesignColors.primary,
-    borderColor: DesignColors.primary,
-  },
-  portionButtonPressed: {
-    opacity: 0.8,
-    transform: [{ scale: 0.96 }],
-  },
-  portionButtonText: {
-    fontSize: 15,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.gray500,
-  },
-  portionButtonTextActive: {
-    color: DesignColors.white,
-  },
-  portionButtonTextPressed: {
-    color: DesignColors.gray700,
-  },
-  sliderRow: {
+  summary: { gap: 5 },
+  estimateTag: {
+    alignSelf: 'flex-start',
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  sliderLabel: {
-    ...Typography.caption,
-    color: DesignColors.gray500,
-  },
-  sliderValue: {
-    ...Typography.bodyBold,
-    color: DesignColors.black,
-  },
-  slider: {
-    width: '100%',
-    height: 32,
-  },
-  stackCard: {
-    gap: Spacing.lg,
-  },
-  heroCalories: {
-    gap: 2,
+    gap: 6,
+    borderRadius: 12,
+    backgroundColor: DesignColors.gray100,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     marginBottom: 4,
   },
-  overline: {
-    fontSize: 12,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.gray500,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  caloriesValue: {
-    fontSize: 56,
-    fontFamily: 'Manrope_800ExtraBold',
-    color: DesignColors.textPrimary,
-  },
-  caloriesLabel: {
-    fontSize: 12,
-    color: DesignColors.textSecondary,
-    fontFamily: 'Manrope_600SemiBold',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  caloriesOriginal: {
-    fontSize: 12,
-    color: DesignColors.gray400,
-    marginTop: 4,
-  },
-  macrosSection: {
-    gap: 12,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  macrosGrid: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  impactCard: {
-    gap: Spacing.sm,
-  },
-  impactHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  impactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  impactLabel: {
-    ...Typography.bodySmall,
-    color: DesignColors.gray600,
-  },
-  impactValue: {
-    ...Typography.bodyBold,
-    color: DesignColors.black,
-  },
-  confidenceWarningGroup: {
-    gap: 10,
-    marginTop: 4,
-  },
-  confidenceBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
+  estimateTagText: { fontSize: 12, fontFamily: 'Manrope_600SemiBold', color: DesignColors.gray700 },
+  foodName: { fontSize: 24, lineHeight: 31, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  servingText: { fontSize: 13, color: DesignColors.gray600 },
+  calorieRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 6 },
+  calorieNumber: { fontSize: 42, lineHeight: 49, fontFamily: 'Manrope_800ExtraBold', color: DesignColors.black },
+  calorieUnit: { fontSize: 15, fontFamily: 'Manrope_600SemiBold', color: DesignColors.gray600 },
+  portionCard: {
+    padding: 16,
     borderWidth: 1,
+    borderColor: DesignColors.gray200,
+    borderRadius: 20,
+    gap: 14,
   },
-  confidenceBannerHigh: {
-    backgroundColor: DesignColors.successBg,
-    borderColor: DesignColors.successBorder,
-  },
-  confidenceBannerMedium: {
-    backgroundColor: DesignColors.warningBg,
-    borderColor: DesignColors.warningBorder,
-  },
-  confidenceBannerLow: {
-    backgroundColor: DesignColors.errorBg,
-    borderColor: DesignColors.errorBorder,
-  },
-  warningBanner: {
-    backgroundColor: DesignColors.warningBg,
-    borderWidth: 1,
-    borderColor: DesignColors.warningBorder,
-    borderRadius: 10,
-    padding: 12,
-    gap: 6,
-  },
-  confidenceBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  confidenceBoxHigh: {
-    backgroundColor: DesignColors.successBg,
-    borderColor: DesignColors.successBorder,
-  },
-  confidenceBoxMedium: {
-    backgroundColor: DesignColors.warningBg,
-    borderColor: DesignColors.warningBorder,
-  },
-  confidenceBoxLow: {
-    backgroundColor: DesignColors.errorBg,
-    borderColor: DesignColors.errorBorder,
-  },
-  confidenceText: {
+  sectionHeadingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sectionTitle: { fontSize: 17, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  sectionHint: { fontSize: 12, color: DesignColors.gray600 },
+  portionButtons: { flexDirection: 'row', gap: 8 },
+  portionButton: {
     flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: DesignColors.gray100,
   },
-  confidenceTextHigh: {
-    color: DesignColors.successDark,
-  },
-  confidenceTextMedium: {
-    color: DesignColors.warningDark,
-  },
-  confidenceTextLow: {
-    color: DesignColors.errorRedDark,
-  },
-  warningsSection: {
-    backgroundColor: DesignColors.warningBg,
-    borderWidth: 1,
-    borderColor: DesignColors.warningBorder,
+  portionButtonSelected: { backgroundColor: DesignColors.black },
+  portionButtonText: { fontSize: 15, fontFamily: 'Manrope_700Bold', color: DesignColors.gray700 },
+  portionButtonTextSelected: { color: DesignColors.white },
+  macroDivider: { height: 1, backgroundColor: DesignColors.gray200 },
+  macroRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  macroItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  macroDot: { width: 7, height: 7, borderRadius: 4 },
+  proteinDot: { backgroundColor: DesignColors.protein },
+  carbsDot: { backgroundColor: DesignColors.carbs },
+  fatDot: { backgroundColor: DesignColors.fat },
+  macroLabel: { fontSize: 12, color: DesignColors.gray600 },
+  macroValue: { fontSize: 12, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  reviewNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 9,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderRadius: 14,
-    padding: 14,
-    gap: 8,
-  },
-  warningHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  warningTitle: {
-    fontSize: 14,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.warningDark,
-  },
-  warningText: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: DesignColors.warningDark,
-    paddingLeft: 4,
-  },
-  collapsibleSection: {
-    backgroundColor: DesignColors.gray50,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  collapsibleHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-  },
-  collapsibleHeaderPressed: {
     backgroundColor: DesignColors.gray100,
-    opacity: 0.9,
   },
-  collapsibleHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  collapsibleTitle: {
-    fontSize: 15,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  microsList: {
-    padding: 14,
-    paddingTop: 0,
-    gap: 10,
-  },
-  microRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  microLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  microLabel: {
-    fontSize: 14,
-    color: DesignColors.gray700,
-  },
-  microRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  microValue: {
-    fontSize: 14,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  microDvBadge: {
-    backgroundColor: DesignColors.gray100,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  microDvBadgeHigh: {
-    backgroundColor: DesignColors.infoBg,
-  },
-  microDvText: {
-    fontSize: 11,
-    color: DesignColors.gray500,
-  },
-  microDvTextHigh: {
-    color: DesignColors.infoDark,
-    fontFamily: 'Manrope_500Medium',
-  },
-  adjustmentsSection: {
-    backgroundColor: DesignColors.gray50,
-    borderRadius: 12,
-    padding: 12,
-    gap: 4,
-  },
-  adjustmentsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  adjustmentsTitle: {
-    fontSize: 13,
-    fontFamily: 'Manrope_500Medium',
-    color: DesignColors.gray700,
-  },
-  adjustmentsHint: {
-    fontSize: 12,
-    color: DesignColors.gray400,
-    paddingLeft: 24,
-  },
-  ingredientsList: {
-    padding: 14,
-    paddingTop: 0,
-    gap: 12,
-  },
-  ingredientItem: {
-    backgroundColor: DesignColors.white,
-    borderRadius: 12,
-    padding: 12,
-    gap: 8,
-  },
-  ingredientItemAdjusted: {
-    borderWidth: 1,
-    borderColor: DesignColors.warningBorder,
-  },
-  ingredientHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  ingredientNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  ingredientName: {
-    fontSize: 14,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  adjustedBadge: {
-    backgroundColor: DesignColors.warningBg,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  adjustedBadgeText: {
-    fontSize: 10,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.warningDark,
-  },
-  ingredientQty: {
-    fontSize: 13,
-    color: DesignColors.gray500,
-  },
-  adjustmentReason: {
-    fontSize: 12,
-    color: DesignColors.warningDark,
-    fontStyle: 'italic',
-  },
-  ingredientNutrition: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  ingredientCal: {
-    fontSize: 12,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.black,
-  },
-  ingredientMacro: {
-    fontSize: 12,
-    color: DesignColors.gray500,
-  },
-  footer: {
-    flexDirection: 'column',
-    gap: 12,
-    padding: 20,
-    paddingBottom: 34,
+  reviewNoteAttention: { backgroundColor: DesignColors.warningBg },
+  reviewNoteText: { flex: 1, fontSize: 13, lineHeight: 19, color: DesignColors.gray700 },
+  detailSection: {
     borderTopWidth: 1,
     borderTopColor: DesignColors.gray200,
   },
+  detailButton: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  detailTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  detailTitle: { fontSize: 15, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  detailCount: {
+    minWidth: 22,
+    textAlign: 'center',
+    fontSize: 12,
+    color: DesignColors.gray700,
+    backgroundColor: DesignColors.gray100,
+    borderRadius: 11,
+    overflow: 'hidden',
+  },
+  detailBody: { paddingBottom: 10, gap: 9 },
+  detailText: { fontSize: 13, lineHeight: 20, color: DesignColors.gray700 },
+  ingredientRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  ingredientInfo: { flex: 1 },
+  ingredientName: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', color: DesignColors.black },
+  ingredientAmount: { fontSize: 12, color: DesignColors.gray600 },
+  ingredientCalories: { fontSize: 13, color: DesignColors.gray700 },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 10,
+    borderTopWidth: 1,
+    borderTopColor: DesignColors.gray200,
+    backgroundColor: DesignColors.white,
+  },
   retakeButton: {
+    minWidth: 96,
+    minHeight: 50,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 52,
-    width: '100%',
-    borderRadius: 16,
-    backgroundColor: 'transparent',
-    borderWidth: 0,
+    gap: 7,
   },
-  retakeButtonPressed: {
-    opacity: 0.7,
-  },
-  retakeText: {
-    fontSize: 15,
-    fontFamily: 'Manrope_600SemiBold',
-    color: DesignColors.gray600,
-  },
+  retakeText: { fontSize: 14, fontFamily: 'Manrope_600SemiBold', color: DesignColors.black },
   saveButton: {
-    flexDirection: 'row',
+    flex: 1,
+    minHeight: 50,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    height: 56,
-    width: '100%',
-    borderRadius: 30,
-    backgroundColor: '#171717',
-    shadowColor: '#171717',
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
+    borderRadius: 25,
+    backgroundColor: DesignColors.black,
   },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonPressed: {
-    backgroundColor: DesignColors.gray800,
-  },
-  saveText: {
-    fontSize: 16,
-    fontFamily: 'Manrope_700Bold',
-    color: DesignColors.white,
-  },
+  saveButtonDisabled: { opacity: 0.6 },
+  saveText: { fontSize: 16, fontFamily: 'Manrope_700Bold', color: DesignColors.white },
+  pressed: { opacity: 0.75 },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
+  emptyTitle: { fontSize: 20, fontFamily: 'Manrope_700Bold', color: DesignColors.black },
+  emptyDescription: { fontSize: 14, color: DesignColors.gray600, textAlign: 'center' },
 });

@@ -1,6 +1,7 @@
 import { AnimationDurations, DesignColors } from '@/constants/theme';
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 type CircularProgressProps = {
   size?: number;

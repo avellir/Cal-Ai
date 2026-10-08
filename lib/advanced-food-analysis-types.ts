@@ -51,7 +51,13 @@ export type FoodCategory =
   | 'dairy' 
   | 'fat' 
   | 'condiment' 
-  | 'spread';
+  | 'spread'
+  | 'leafyGreen'
+  | 'oil'
+  | 'garnish'
+  | 'completeDish'
+  | 'pizzaDough'
+  | 'unknown';
 
 /**
  * Individual ingredient with quantity and metadata
@@ -63,6 +69,7 @@ export type Ingredient = {
   preparation?: string; // e.g., "grilled", "fried"
   confidence: number;
   // Validation metadata (added by portion validation)
+  regionIndex?: number; // Recognition region provenance for duplicate handling.
   category?: FoodCategory; // Food category for portion validation
   wasAdjusted?: boolean; // Whether portion was adjusted
   adjustmentReason?: string; // Reason for adjustment
@@ -82,9 +89,9 @@ export type DecompositionResult = {
 // ============================================================================
 
 /**
- * Nutritional data from FatSecret API
+ * Nutritional reference data for an ingredient
  */
-export type FatSecretNutrition = {
+export type IngredientNutrition = {
   foodId: string;
   foodName: string;
   calories: number;
@@ -99,7 +106,7 @@ export type FatSecretNutrition = {
  * Ingredient enriched with nutritional data
  */
 export type EnrichedIngredient = Ingredient & {
-  nutrition: FatSecretNutrition;
+  nutrition: IngredientNutrition;
   scaledNutrition: {
     calories: number;
     protein: number;
@@ -242,9 +249,9 @@ export function isDecompositionResult(value: unknown): value is DecompositionRes
 }
 
 /**
- * Type guard to check if a value is a valid FatSecretNutrition
+ * Type guard to check if a value is valid ingredient nutrition
  */
-export function isFatSecretNutrition(value: unknown): value is FatSecretNutrition {
+export function isIngredientNutrition(value: unknown): value is IngredientNutrition {
   if (typeof value !== 'object' || value === null) {
     return false;
   }
@@ -280,7 +287,7 @@ export function isEnrichedIngredient(value: unknown): value is EnrichedIngredien
   return (
     typeof enriched.nutrition === 'object' &&
     enriched.nutrition !== null &&
-    isFatSecretNutrition(enriched.nutrition) &&
+    isIngredientNutrition(enriched.nutrition) &&
     typeof enriched.scaledNutrition === 'object' &&
     enriched.scaledNutrition !== null &&
     typeof (enriched.scaledNutrition as Record<string, unknown>).calories === 'number' &&

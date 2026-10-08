@@ -1,17 +1,17 @@
 import type { ComponentProps } from 'react';
-import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import type { ColorValue, StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Platform, StyleSheet } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 import { Ionicons } from '@expo/vector-icons';
 
 import { DesignColors } from '@/constants/theme';
 
-type SymbolName = ComponentProps<typeof SymbolView>['name'];
+type SymbolName = Extract<ComponentProps<typeof SymbolView>['name'], string>;
 
 type Props = {
   name: SymbolName;
   size?: number;
-  color?: string;
+  color?: ColorValue;
   style?: StyleProp<ViewStyle>;
 };
 

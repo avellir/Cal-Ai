@@ -1,28 +1,15 @@
 /**
  * Portion Validation Module
  * 
- * Applies realistic constraints to AI-estimated portions before nutritional lookup.
- * Implements hard limits based on food categories to prevent unrealistic portion estimates.
+ * Checks AI-estimated portions before nutritional lookup.
+ * Serving guidelines produce warnings; only the supported schema ceiling caps quantities.
  * 
  * Implements error handling and user feedback (Requirements 5.4, 5.5, 6.4)
  */
 
 
-export type FoodCategory =
-  | 'protein'
-  | 'grain'
-  | 'vegetable'
-  | 'fruit'
-  | 'dairy'
-  | 'fat'
-  | 'condiment'
-  | 'spread'
-  | 'leafyGreen'
-  | 'oil'
-  | 'garnish'  // Small items like olives, pickles, capers
-  | 'completeDish'  // Whole dishes: pizza, burger, sandwich, etc.
-  | 'pizzaDough'    // Pizza base/crust specifically
-  | 'unknown';
+import type { FoodCategory } from '@/lib/advanced-food-analysis-types';
+import { containsFoodPhrase, normalizeFoodName } from '@/services/foodNames';
 
 export type Unit = 'g' | 'ml' | 'oz' | 'cup' | 'tbsp' | 'tsp' | 'piece';
 
@@ -38,6 +25,7 @@ export interface ValidationResult {
   confidencePenalty: number;
   reason: string;
   category: FoodCategory;
+  warning?: string;
 }
 
 interface ImageContext {
@@ -48,12 +36,8 @@ interface ImageContext {
 /**
  * Portion constraints for different food categories
  * All values in grams or milliliters
- * BALANCED estimates - accurate for both small items and complete dishes
- * 
- * CALIBRATED based on real-world testing:
- * - Proteins tend to be overestimated by AI (chicken pieces, eggs)
- * - Eggs: 1 large egg = ~50g, scrambled eggs portion typically 80-120g (2 eggs)
- * - Chicken: sliced pieces on a plate typically 100-150g, not 180g+
+ * Single-serving heuristics for review, not measured bounds for the photo.
+ * Small toppings and multiple servings can legitimately fall outside these ranges.
  */
 const PORTION_CONSTRAINTS: Record<FoodCategory, PortionConstraint> = {
   spread: { min: 5, max: 50, typical: 25 },      // Hummus, labneh, yogurt dips
@@ -81,9 +65,8 @@ const MEAL_CONSTRAINTS = {
 };
 
 /**
- * Specific item overrides for foods that need tighter constraints
- * These override the category defaults for more accurate estimates
- * Based on real-world testing and common AI overestimation patterns
+ * Specific single-serving guidelines that override category warning ranges.
+ * These never establish the quantity eaten or replace the visible portion.
  */
 const SPECIFIC_ITEM_CONSTRAINTS: Record<string, PortionConstraint> = {
   // Eggs - AI tends to overestimate scrambled eggs
@@ -176,6 +159,7 @@ const CATEGORY_KEYWORDS: Record<FoodCategory, string[]> = {
     'flax', 'sunflower seeds', 'pumpkin seeds'
   ],
   garnish: [
+    'basil', 'parsley', 'cilantro', 'dill', 'mint', 'chives', 'rosemary', 'thyme', 'herbs',
     'olive', 'olives', 'kalamata', 'pickle', 'pickles', 'pickled', 'gherkin',
     'caper', 'capers', 'radish', 'radishes', 'cornichon', 'jalapeño', 'jalapeno',
     'sun-dried tomato', 'sundried tomato', 'anchovy', 'anchovies', 'artichoke hearts'
@@ -196,14 +180,11 @@ const CATEGORY_KEYWORDS: Record<FoodCategory, string[]> = {
  * Categorize an ingredient based on its name
  */
 export function categorizeIngredient(ingredientName: string): FoodCategory {
-  const nameLower = ingredientName.toLowerCase();
-
-  // Check each category's keywords
-  for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    for (const keyword of keywords) {
-      if (nameLower.includes(keyword)) {
-        return category as FoodCategory;
-      }
+  const priority: FoodCategory[] = ['pizzaDough', 'oil', 'spread', 'condiment',
+    'leafyGreen', 'completeDish', 'protein', 'grain', 'vegetable', 'fruit', 'dairy', 'fat', 'garnish'];
+  for (const category of priority) {
+    if (CATEGORY_KEYWORDS[category].some(keyword => containsFoodPhrase(ingredientName, keyword))) {
+      return category;
     }
   }
 
@@ -294,17 +275,12 @@ export function validatePortionSize(
   const category = categorizeIngredient(ingredientName);
 
   // Check for specific item constraints first (more accurate than category defaults)
-  const nameLower = ingredientName.toLowerCase();
-  let constraints: PortionConstraint | undefined;
-  
-  // Try exact match first, then partial match for specific items
-  for (const [itemName, itemConstraints] of Object.entries(SPECIFIC_ITEM_CONSTRAINTS)) {
-    if (nameLower === itemName || nameLower.includes(itemName) || itemName.includes(nameLower)) {
-      constraints = itemConstraints;
-      console.log(`📏 Using specific constraints for "${ingredientName}" (matched: ${itemName})`);
-      break;
-    }
-  }
+  const name = normalizeFoodName(ingredientName);
+  const specificItems = Object.entries(SPECIFIC_ITEM_CONSTRAINTS);
+  const exact = specificItems.find(([itemName]) => normalizeFoodName(itemName) === name);
+  const specific = exact ?? specificItems.sort(([a], [b]) => b.length - a.length)
+    .find(([itemName]) => containsFoodPhrase(name, itemName));
+  let constraints = specific?.[1];
   
   // Fall back to category constraints if no specific match
   if (!constraints) {
@@ -315,6 +291,7 @@ export function validatePortionSize(
   let normalizedQuantity: number;
   try {
     normalizedQuantity = normalizeToGrams(quantity, unit, category);
+    if (!Number.isFinite(normalizedQuantity)) throw new Error('Unsupported portion unit');
   } catch (err) {
     const error = new Error(`Validation failed for unit: Failed to normalize unit ${unit}: ${err}`);
     error.name = 'ValidationError';
@@ -327,20 +304,19 @@ export function validatePortionSize(
   let reason = '';
   let confidencePenalty = 0;
 
-  if (normalizedQuantity < constraints.min) {
-    // Below minimum - adjust to minimum
-    adjustedQuantity = constraints.min;
+  const warning = normalizedQuantity < constraints.min || normalizedQuantity > constraints.max
+    ? `${ingredientName}: ${normalizedQuantity.toFixed(1)}${unit === 'ml' ? 'ml' : 'g'} is outside the single-serving guideline (${constraints.min}-${constraints.max}). Confirm the visible portion and number of servings.`
+    : undefined;
+
+  // Guidelines do not establish the amount eaten. Keep toppings and multi-serving
+  // quantities; cap only values beyond the supported vision schema's ceiling.
+  if (normalizedQuantity > 10000) {
+    adjustedQuantity = 10000;
     wasAdjusted = true;
-    reason = `${ingredientName}: Portion size (${normalizedQuantity.toFixed(0)}${unit === 'ml' ? 'ml' : 'g'}) was below realistic minimum. Adjusted to ${constraints.min}${unit === 'ml' ? 'ml' : 'g'} for ${category}.`;
-    confidencePenalty = calculateConfidencePenalty(normalizedQuantity, adjustedQuantity, category);
-  } else if (normalizedQuantity > constraints.max) {
-    // Above maximum - adjust to typical value (more conservative than max)
-    adjustedQuantity = constraints.typical;
-    wasAdjusted = true;
-    reason = `${ingredientName}: Portion size (${normalizedQuantity.toFixed(0)}${unit === 'ml' ? 'ml' : 'g'}) exceeded realistic maximum. Adjusted to typical value of ${constraints.typical}${unit === 'ml' ? 'ml' : 'g'} for ${category}.`;
+    reason = `${ingredientName}: Portion exceeded the supported 10000g/ml limit and was capped. Confirm the portion before saving.`;
     confidencePenalty = calculateConfidencePenalty(normalizedQuantity, adjustedQuantity, category);
   } else {
-    reason = `${ingredientName}: Portion size within acceptable range for ${category}.`;
+    reason = warning ?? `${ingredientName}: Portion size within the guideline for ${category}.`;
   }
 
   // Convert back to original unit if needed
@@ -349,11 +325,12 @@ export function validatePortionSize(
     : adjustedQuantity / normalizeToGrams(1, unit, category);
 
   return {
-    adjustedQuantity: Math.round(finalQuantity * 10) / 10, // Round to 1 decimal
+    adjustedQuantity: wasAdjusted ? finalQuantity : quantity,
     wasAdjusted,
     confidencePenalty,
     reason,
     category,
+    warning,
   };
 }
 
@@ -364,7 +341,7 @@ export function validatePortionSize(
  * @returns Validation result indicating if total weight is realistic
  */
 export function validateTotalMealWeight(
-  ingredients: Array<{ quantity: number; unit: Unit; category: FoodCategory }>
+  ingredients: { quantity: number; unit: Unit; category: FoodCategory }[]
 ): { isValid: boolean; totalWeight: number; warning?: string } {
   // Sum up all ingredient weights in grams
   const totalWeight = ingredients.reduce((sum, ingredient) => {
@@ -399,7 +376,7 @@ export function validateTotalMealWeight(
  * @returns Array of validation results
  */
 export function validateIngredients(
-  ingredients: Array<{ name: string; quantity: number; unit: Unit }>,
+  ingredients: { name: string; quantity: number; unit: Unit }[],
   imageContext?: ImageContext
 ): ValidationResult[] {
   return ingredients.map(ingredient =>

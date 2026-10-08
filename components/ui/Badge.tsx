@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, Text, View, ViewStyle } from 'react-native';
+import { StyleSheet, View, ViewStyle } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { BorderRadius, DesignColors, Spacing, Typography } from '@/constants/theme';
 

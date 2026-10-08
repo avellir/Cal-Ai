@@ -3,8 +3,9 @@ import { AnimationDurations, BorderRadius, DesignColors, Layout, Spacing, Typogr
 import { calculateAge } from '@/lib/user-goals-types';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { useGoalFlow } from './GoalFlowContext';
+import { Alert, Animated, Modal, ScrollView, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { useGoalFlow } from '@/components/goal-flow/GoalFlowContext';
 
 const MONTHS = [
   'January', 'February', 'March', 'April', 'May', 'June',

@@ -47,11 +47,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#F2F2F7',
   },
   base: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: '#E5E5EA',
   },
   shimmer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   gradient: {
     flex: 1,

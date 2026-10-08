@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { GoalFlowProvider } from './GoalFlowContext';
+import { GoalFlowProvider } from '@/components/goal-flow/GoalFlowContext';
 
 export default function GoalFlowLayout() {
   return (

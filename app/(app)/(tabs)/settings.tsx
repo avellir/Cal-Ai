@@ -3,12 +3,12 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ACTIVITY_LEVEL_LABELS, ACTIVITY_LEVEL_SUBTITLES } from '@/app/constants/settings';
-import type { Units } from '@/app/types/settings';
+import { ACTIVITY_LEVEL_LABELS, ACTIVITY_LEVEL_SUBTITLES } from '@/constants/settings';
 import { SettingsPicker } from '@/components/settings/SettingsPicker';
 import { SettingsRow } from '@/components/settings/SettingsRow';
 import { SettingsSection } from '@/components/settings/SettingsSection';
@@ -18,7 +18,7 @@ import { AppBackground } from '@/components/ui/AppBackground';
 import { WeightEntryModal } from '@/components/WeightEntryModal';
 import { useSessionStore } from '@/lib/session-store';
 import { supabase } from '@/lib/supabase';
-import { calculateAge, type ActivityLevel, type Sex } from '@/lib/user-goals-types';
+import { calculateAge, type ActivityLevel, type Sex, type UnitSystem as Units } from '@/lib/user-goals-types';
 import { calculateNutritionPlan } from '@/services/goalCalculation';
 import { patchUserGoals } from '@/services/userGoals';
 import { useUserGoalsStore } from '@/store/userGoalsStore';
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     marginRight: 14,
   },
   avatarGradient: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   avatarText: {
     fontSize: 20,

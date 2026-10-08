@@ -1,3 +1,5 @@
+import { isBeverageName, normalizeFoodName } from '@/services/foodNames';
+
 /**
  * Edge Case Detection and Handling for Advanced Food Analysis
  * 
@@ -125,61 +127,14 @@ export function detectSingleIngredient(segmentation: SegmentationResult): EdgeCa
 
   const region = segmentation.regions[0];
 
-  // Check if description indicates a single whole ingredient
-  const singleIngredientIndicators = [
-    'whole',
-    'single',
-    'one',
-    'apple',
-    'banana',
-    'orange',
-    'egg',
-    'avocado',
-    'tomato',
-    'potato',
-    'carrot',
-    'cucumber',
-    'piece of fruit',
-    'whole fruit',
-    'single vegetable',
-  ];
-
-  const descriptionLower = region.description.toLowerCase();
-  const hasSingleIndicator = singleIngredientIndicators.some(indicator =>
-    descriptionLower.includes(indicator)
-  );
-
-  // Check if description does NOT indicate a prepared dish
-  const preparedDishIndicators = [
-    'mixed',
-    'cooked',
-    'prepared',
-    'dish',
-    'meal',
-    'plate',
-    'bowl',
-    'salad',
-    'stir-fry',
-    'casserole',
-    'stew',
-    'soup',
-  ];
-
-  const hasPreparedIndicator = preparedDishIndicators.some(indicator =>
-    descriptionLower.includes(indicator)
-  );
-
-  // Single ingredient if:
-  // 1. Has single ingredient indicator, OR
-  // 2. High confidence (>80) and no prepared dish indicators
-  if (hasSingleIndicator || (region.confidence > 80 && !hasPreparedIndicator)) {
+  // A confident region is not necessarily one ingredient (toast, dessert,
+  // mixed bowls). Only explicit whole-food captions qualify for this shortcut.
+  const description = normalizeFoodName(region.description);
+  if (/^(?:(?:a|an|one|single|whole|fresh|raw|ripe|large|small|medium) )*(?:apple|banana|orange|egg|avocado|tomato|potato|carrot|cucumber)$/.test(description)) {
     return {
-      type: 'single_ingredient',
-      confidence: hasSingleIndicator ? 85 : 70,
-      reason: `Single whole ingredient detected: ${region.description}`,
-      metadata: {
-        ingredientName: region.description,
-      },
+      type: 'single_ingredient', confidence: 85,
+      reason: 'Whole ingredient detected: ' + region.description,
+      metadata: { ingredientName: region.description },
     };
   }
 
@@ -233,53 +188,18 @@ export function extractSingleIngredientName(region: FoodRegion): string {
  * @returns EdgeCaseDetectionResult if nutrition label detected, null otherwise
  */
 export function detectPackagedFoodLabel(segmentation: SegmentationResult): EdgeCaseDetectionResult | null {
-  // Check if any region description mentions a label or package
-  const labelIndicators = [
-    'label',
-    'nutrition facts',
-    'nutrition label',
-    'package',
-    'packaged',
-    'box',
-    'container',
-    'wrapper',
-    'can',
-    'bottle',
-    'barcode',
-  ];
-
-  for (const region of segmentation.regions) {
-    const descriptionLower = region.description.toLowerCase();
-    const hasLabelIndicator = labelIndicators.some(indicator =>
-      descriptionLower.includes(indicator)
-    );
-
-    if (hasLabelIndicator) {
-      return {
-        type: 'packaged_food_label',
-        confidence: 75,
-        reason: `Nutrition label or package detected: ${region.description}`,
-        metadata: {
-          description: region.description,
-        },
-      };
-    }
-  }
-
-  // Check segmentation notes for label mentions
-  if (segmentation.notes) {
-    const notesLower = segmentation.notes.toLowerCase();
-    const hasLabelIndicator = labelIndicators.some(indicator =>
-      notesLower.includes(indicator)
-    );
-
-    if (hasLabelIndicator) {
-      return {
-        type: 'packaged_food_label',
-        confidence: 70,
-        reason: `Nutrition label mentioned in notes: ${segmentation.notes}`,
-      };
-    }
+  // Only a visible nutrition panel warrants OCR. Generic containers and uncertainty
+  // notes (for example "cannot measure oil") do not establish that a label exists.
+  const region = segmentation.regions.find(region =>
+    /\bnutrition(?:al)? (?:facts|information|label|panel)\b/i.test(region.description)
+  );
+  if (region) {
+    return {
+      type: 'packaged_food_label',
+      confidence: 85,
+      reason: `Nutrition panel detected: ${region.description}`,
+      metadata: { description: region.description },
+    };
   }
 
   return null;
@@ -299,34 +219,12 @@ export function detectPackagedFoodLabel(segmentation: SegmentationResult): EdgeC
  * @returns EdgeCaseDetectionResult if beverage detected, null otherwise
  */
 export function detectBeverage(segmentation: SegmentationResult): EdgeCaseDetectionResult | null {
-  const beverageIndicators = [
-    'drink',
-    'beverage',
-    'juice',
-    'soda',
-    'water',
-    'coffee',
-    'tea',
-    'milk',
-    'smoothie',
-    'shake',
-    'beer',
-    'wine',
-    'cocktail',
-    'glass',
-    'cup',
-    'mug',
-    'bottle',
-    'can',
-  ];
 
   const beverageRegions: FoodRegion[] = [];
 
   for (const region of segmentation.regions) {
     const descriptionLower = region.description.toLowerCase();
-    const hasBeverageIndicator = beverageIndicators.some(indicator =>
-      descriptionLower.includes(indicator)
-    );
+    const hasBeverageIndicator = isBeverageName(descriptionLower);
 
     if (hasBeverageIndicator) {
       beverageRegions.push(region);
@@ -368,24 +266,7 @@ export function detectBeverage(segmentation: SegmentationResult): EdgeCaseDetect
  */
 export function adjustBeverageUnits(ingredients: Ingredient[]): Ingredient[] {
   return ingredients.map(ingredient => {
-    const nameLower = ingredient.name.toLowerCase();
-
-    // Check if this is a beverage
-    const beverageKeywords = [
-      'juice',
-      'soda',
-      'water',
-      'coffee',
-      'tea',
-      'milk',
-      'smoothie',
-      'shake',
-      'beer',
-      'wine',
-      'cocktail',
-    ];
-
-    const isBeverage = beverageKeywords.some(keyword => nameLower.includes(keyword));
+    const isBeverage = isBeverageName(ingredient.name);
 
     if (isBeverage && ingredient.unit === 'g') {
       // Convert grams to milliliters (1:1 for most beverages)
@@ -577,7 +458,7 @@ export function detectEdgeCases(segmentation: SegmentationResult): EdgeCaseDetec
 
 /**
  * Extracts nutritional information from a visible nutrition label
- * Uses Gemini to read and parse the nutrition facts panel
+ * Uses Azure to read and parse the nutrition facts panel
  * 
  * Requirement 10.2: Extract nutritional information from labels
  * 
@@ -588,97 +469,10 @@ export async function extractNutritionFromLabel(
   base64Image: string
 ): Promise<AdvancedAnalysisResult> {
   const startTime = Date.now();
-  const LABEL_EXTRACTION_TEMPERATURE = 0.1;
 
   try {
-    // Import Gemini utilities
-    const { runGeminiRequest, buildParts } = await import('./geminiService');
-
-    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_GEMINI_API_KEY || process.env.GOOGLE_GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error('Google Gemini API key not configured');
-    }
-
-    const model =
-      process.env.EXPO_PUBLIC_GOOGLE_GEMINI_MODEL ||
-      process.env.GOOGLE_GEMINI_MODEL ||
-      'gemini-2.5-flash-lite';  // Updated to 2.5-flash-lite (released July 2025)
-
-    const prompt = `Extract nutritional information from the visible nutrition label in this image.
-
-EXTRACTION INSTRUCTIONS:
-1. Locate the "Nutrition Facts" or "Nutrition Information" panel
-2. Extract the following values per serving:
-   - Serving size (with unit)
-   - Calories
-   - Total Fat (grams)
-   - Total Carbohydrates (grams)
-   - Protein (grams)
-3. If multiple servings are shown, extract data for ONE serving
-4. If the label is partially obscured or unclear, note which values are uncertain
-
-IMPORTANT:
-- Only extract values that are clearly visible
-- Do not estimate or guess values
-- If a value is not visible, set it to null
-- Include the product name if visible
-
-Return JSON with extracted nutrition data.`;
-
-    const schema = {
-      type: 'object',
-      properties: {
-        productName: {
-          type: 'string',
-          description: 'Product name if visible on package',
-        },
-        servingSize: {
-          type: 'string',
-          description: 'Serving size with unit (e.g., "1 cup (240ml)", "2 pieces (50g)")',
-        },
-        calories: {
-          type: 'number',
-          description: 'Calories per serving',
-          minimum: 0,
-        },
-        fat: {
-          type: 'number',
-          description: 'Total fat in grams per serving',
-          minimum: 0,
-        },
-        carbs: {
-          type: 'number',
-          description: 'Total carbohydrates in grams per serving',
-          minimum: 0,
-        },
-        protein: {
-          type: 'number',
-          description: 'Protein in grams per serving',
-          minimum: 0,
-        },
-        confidence: {
-          type: 'number',
-          description: 'Confidence in extraction accuracy (0-100)',
-          minimum: 0,
-          maximum: 100,
-        },
-        notes: {
-          type: 'string',
-          description: 'Any issues with label visibility or extraction',
-        },
-      },
-      required: ['servingSize', 'calories', 'fat', 'carbs', 'protein', 'confidence'],
-    };
-
-    const response = await runGeminiRequest({
-      apiKey,
-      model,
-      prompt,
-      base64Image,
-      temperature: LABEL_EXTRACTION_TEMPERATURE, // Low temperature for accurate extraction
-      maxOutputTokens: 500,
-      responseSchema: schema,
-    });
+    const { runPhotoAnalysis } = await import('./photoAnalysis');
+    const response = await runPhotoAnalysis({ mode: 'label', base64Image });
 
     const extracted = JSON.parse(response);
 
@@ -741,7 +535,7 @@ Return JSON with extracted nutrition data.`;
         processingTimeMs,
         stagesCompleted: ['label_extraction'],
         labelExtraction: {
-          method: 'gemini_ocr',
+          method: 'azure_ocr',
           notes: extracted.notes,
         },
       },

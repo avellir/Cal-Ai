@@ -3,7 +3,7 @@
 ## Project Context
 
 Cal AI is an Expo Router + React Native app for:
-- meal photo analysis (Gemini + FatSecret nutrition lookup),
+- meal photo analysis (Azure OpenAI via Supabase Edge Functions + FatSecret nutrition lookup),
 - meal logging and history with Supabase Storage image uploads,
 - goal flow and macro target calculation,
 - progress tracking with user weight log entries.
@@ -14,7 +14,7 @@ Cal AI is an Expo Router + React Native app for:
 - `app/(public)/`: unauthenticated flow (`signin`, auth entry points).
 - `app/(app)/`: authenticated app shell, tabs, camera, meal history, and goal-flow/settings routes.
 - `components/`: reusable UI building blocks.
-- `components/ui/`: design-system primitives (`Button`, `Card`, `InputField`, `ProgressBar`, etc.).
+- `components/ui/`: shared UI primitives (`Card`, `Chip`, `ProgressBar`, etc.).
 - `components/goal-flow/`, `components/settings/`: feature-specific UI.
 - `services/`: business logic and integrations.
 - `services/advancedFoodAnalysis.ts`: main orchestrator for the food analysis pipeline.
@@ -39,14 +39,14 @@ Run from repo root:
 - `npm run web`: launch web target.
 - `npm test`: run Jest (`**/__tests__/**/*.test.ts(x)`).
 - `npm run lint`: run Expo ESLint config.
-- `npm run reset-project`: Expo scaffold reset script (template utility; avoid in normal feature work).
+- `npm run typecheck`: check TypeScript without emitting files.
 
 ## Environment & Runtime Configuration
 
 Current runtime keys used by the app:
 
-- `EXPO_PUBLIC_GOOGLE_GEMINI_API_KEY` (required for advanced food analysis).
-- `EXPO_PUBLIC_GOOGLE_GEMINI_MODEL` (optional override).
+- Azure settings are server-only Supabase secrets: `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL`, `AZURE_OPENAI_DEPLOYMENT`.
+- `services/photoAnalysis.ts` calls the authenticated `supabase/functions/analyze-food/index.ts` function.
 - `EXPO_PUBLIC_FATSECRET_CLIENT_ID` / `EXPO_PUBLIC_FATSECRET_CLIENT_SECRET`.
 - `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
 
@@ -63,6 +63,9 @@ Notes:
 - Use `@/` import alias for repo-root modules.
 - Naming: `PascalCase.tsx` for React components; `camelCase.ts` for services/store/helpers; route files in `app/` follow Expo Router naming (lowercase or kebab-case where relevant).
 - Reuse tokens from `constants/theme.ts` and primitives from `components/ui/` before adding one-off styling.
+- Keep non-route modules outside `app/`: settings labels live in `constants/settings.ts`, settings types use `lib/user-goals-types.ts`, and goal-flow context lives in `components/goal-flow/`.
+- Use `Text` from `@/components/ui/Text` for app text so the default Manrope font is applied without mutating React Native globals.
+- `AddMealInput` contains nutrition for one base serving; store the selected portion in `quantity`. Never pass already-scaled nutrition with a portion multiplier.
 - Keep side effects and API calls in `services/`; keep components focused on rendering + orchestration.
 - For food analysis, keep `AdvancedAnalysisResult` as the source of truth from service to UI. Derive display labels from that canonical shape instead of flattening into route-specific legacy fields.
 
@@ -72,7 +75,7 @@ Notes:
 - Test environment: `__tests__/customEnvironment.js`.
 - Setup file: `__tests__/setup.ts`.
 - Test file pattern: `__tests__/**/*.test.ts` and `__tests__/**/*.test.tsx`.
-- Add/update mocks in `__tests__/__mocks__/` for Expo, AsyncStorage, Supabase, and image tooling.
+- Shared Expo/AsyncStorage/image mocks live in `__tests__/setup.ts`; service-specific mocks live alongside their tests.
 - Prioritize tests for store cache behavior, upload/error paths (meal photos + meal log), and nutrition/goal data mapping.
 - When touching food analysis, prioritize tests for route-param serialization, serving/unit preservation (`g` vs `ml` vs `serving`), validation warnings, adjustment provenance, and fallback nutrition sources.
 

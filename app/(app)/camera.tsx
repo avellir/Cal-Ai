@@ -1,23 +1,20 @@
 import { Feather } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Alert, AppState, Pressable, StyleSheet, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
 
 import { Card } from '@/components/ui/Card';
 import { Chip } from '@/components/ui/Chip';
 import { DesignColors } from '@/constants/theme';
-import { analyzeAdvancedFoodImage } from '@/services/foodAnalysis';
+import { analyzeAdvancedFoodImage, getMealInputFromAnalysis } from '@/services/foodAnalysis';
+import { getLoggedAtForDate } from '@/services/mealValidation';
+import { useSessionStore } from '@/lib/session-store';
+import { useMealDraftStore } from '@/store/mealDraftStore';
 
 export default function CameraScreen() {
+  const params = useLocalSearchParams<{ date?: string }>();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [mediaLibraryPermission, setMediaLibraryPermission] =
     useState<ImagePicker.PermissionResponse | null>(null);
@@ -165,6 +162,11 @@ export default function CameraScreen() {
   };
 
   const analyzeImage = async (imageUri: string) => {
+    const userId = useSessionStore.getState().session?.user.id;
+    if (!userId) {
+      Alert.alert('Session expired', 'Please sign in again to review a meal.');
+      return;
+    }
     setIsAnalyzing(true);
 
     try {
@@ -173,11 +175,13 @@ export default function CameraScreen() {
       setIsAnalyzing(false);
 
       if (result.success && result.data) {
+        if (useSessionStore.getState().session?.user.id !== userId) return;
+        const input = getMealInputFromAnalysis(result.data, 1, imageUri, { loggedAt: getLoggedAtForDate(params.date) });
+        const draftId = useMealDraftStore.getState().createDraft(userId, input, result);
         router.push({
           pathname: '/(app)/food-result',
           params: {
-            imageUri,
-            analysisData: JSON.stringify(result.data),
+            draftId,
           },
         });
       } else {

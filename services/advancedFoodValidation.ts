@@ -25,21 +25,12 @@ const VALIDATION_CONFIG = {
   
   // Confidence adjustments
   HIGH_DISCREPANCY_PENALTY: 15,
-  USDA_FALLBACK_PENALTY_PER_INGREDIENT: 5,
+  GENERIC_ESTIMATE_PENALTY_PER_INGREDIENT: 5,
   LOW_CONFIDENCE_INGREDIENT_PENALTY: 3,
-  
-  // Minimum confidence thresholds
-  MIN_CONFIDENCE_AFTER_ADJUSTMENT: 40,
-  MIN_CONFIDENCE_WITH_FALLBACKS: 50,
-  MIN_CONFIDENCE_WITH_LOW_INGREDIENTS: 45,
   
   // Ingredient confidence thresholds
   LOW_INGREDIENT_CONFIDENCE_THRESHOLD: 50,
   
-  // Macro ratio validation (typical ranges)
-  PROTEIN_CALORIE_RATIO: { min: 0.10, max: 0.35 }, // 10-35% of calories
-  CARBS_CALORIE_RATIO: { min: 0.45, max: 0.65 },   // 45-65% of calories
-  FAT_CALORIE_RATIO: { min: 0.20, max: 0.35 },     // 20-35% of calories
 };
 
 /**
@@ -112,6 +103,8 @@ export function validateAdvancedAnalysis(
 
   return {
     ...result,
+    success: validation.isValid,
+    error: validation.isValid ? result.error : validation.errors.join('; '),
     data: {
       ...result.data,
       confidence: validation.adjustedConfidence,
@@ -144,7 +137,11 @@ function performValidation(
 ): ValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
-  let adjustedConfidence = originalConfidence;
+  const calorieWeight = ingredients.reduce((sum, ingredient) => sum + Math.max(0, ingredient.scaledNutrition.calories), 0);
+  const ingredientConfidence = calorieWeight > 0
+    ? ingredients.reduce((sum, ingredient) => sum + ingredient.confidence * Math.max(0, ingredient.scaledNutrition.calories), 0) / calorieWeight
+    : originalConfidence;
+  let adjustedConfidence = Math.max(0, Math.min(originalConfidence, ingredientConfidence));
 
   // ========================================================================
   // 1. Calorie-to-Macro Ratio Validation
@@ -159,25 +156,25 @@ function performValidation(
     
     // Apply confidence penalty for high discrepancy
     adjustedConfidence = Math.max(
-      VALIDATION_CONFIG.MIN_CONFIDENCE_AFTER_ADJUSTMENT,
+      0,
       adjustedConfidence - VALIDATION_CONFIG.HIGH_DISCREPANCY_PENALTY
     );
   }
 
   // ========================================================================
-  // 2. USDA Fallback Usage Check
+  // 2. Generic Estimate Usage Check
   // ========================================================================
-  const fallbackCount = countUSDAFallbacks(ingredients);
+  const fallbackCount = countGenericEstimates(ingredients);
   
   if (fallbackCount > 0) {
     warnings.push(
-      `${fallbackCount} ingredient(s) used USDA fallback data (FatSecret lookup failed)`
+      `${fallbackCount} ingredient(s) had no nutrition reference and used a generic estimate. Review before saving.`
     );
     
     // Apply confidence penalty for each fallback
-    const fallbackPenalty = fallbackCount * VALIDATION_CONFIG.USDA_FALLBACK_PENALTY_PER_INGREDIENT;
+    const fallbackPenalty = fallbackCount * VALIDATION_CONFIG.GENERIC_ESTIMATE_PENALTY_PER_INGREDIENT;
     adjustedConfidence = Math.max(
-      VALIDATION_CONFIG.MIN_CONFIDENCE_WITH_FALLBACKS,
+      0,
       adjustedConfidence - fallbackPenalty
     );
   }
@@ -195,7 +192,7 @@ function performValidation(
     // Apply confidence penalty for low confidence ingredients
     const lowConfidencePenalty = lowConfidenceIngredients * VALIDATION_CONFIG.LOW_CONFIDENCE_INGREDIENT_PENALTY;
     adjustedConfidence = Math.max(
-      VALIDATION_CONFIG.MIN_CONFIDENCE_WITH_LOW_INGREDIENTS,
+      0,
       adjustedConfidence - lowConfidencePenalty
     );
   }
@@ -205,42 +202,8 @@ function performValidation(
   // ========================================================================
   const macroRatios = calculateMacroRatios(totalNutrition);
   
-  // Check if macro ratios are within typical ranges
-  if (macroRatios.protein < VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.min) {
-    warnings.push(
-      `Protein ratio unusually low: ${(macroRatios.protein * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.max * 100}%)`
-    );
-  } else if (macroRatios.protein > VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.max) {
-    warnings.push(
-      `Protein ratio unusually high: ${(macroRatios.protein * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.PROTEIN_CALORIE_RATIO.max * 100}%)`
-    );
-  }
-
-  if (macroRatios.carbs < VALIDATION_CONFIG.CARBS_CALORIE_RATIO.min) {
-    warnings.push(
-      `Carbs ratio unusually low: ${(macroRatios.carbs * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.CARBS_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.CARBS_CALORIE_RATIO.max * 100}%)`
-    );
-  } else if (macroRatios.carbs > VALIDATION_CONFIG.CARBS_CALORIE_RATIO.max) {
-    warnings.push(
-      `Carbs ratio unusually high: ${(macroRatios.carbs * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.CARBS_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.CARBS_CALORIE_RATIO.max * 100}%)`
-    );
-  }
-
-  if (macroRatios.fat < VALIDATION_CONFIG.FAT_CALORIE_RATIO.min) {
-    warnings.push(
-      `Fat ratio unusually low: ${(macroRatios.fat * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.FAT_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.FAT_CALORIE_RATIO.max * 100}%)`
-    );
-  } else if (macroRatios.fat > VALIDATION_CONFIG.FAT_CALORIE_RATIO.max) {
-    warnings.push(
-      `Fat ratio unusually high: ${(macroRatios.fat * 100).toFixed(1)}% of calories ` +
-      `(typical: ${VALIDATION_CONFIG.FAT_CALORIE_RATIO.min * 100}-${VALIDATION_CONFIG.FAT_CALORIE_RATIO.max * 100}%)`
-    );
-  }
+  // Meal composition is not an accuracy test: a valid egg or drink does not
+  // need to meet whole-diet macro ratios. Keep ratios as diagnostics only.
 
   // ========================================================================
   // 5. Zero Nutrition Check
@@ -251,6 +214,13 @@ function performValidation(
 
   if (totalNutrition.protein === 0 && totalNutrition.carbs === 0 && totalNutrition.fat === 0) {
     errors.push('All macronutrients are zero - invalid nutritional data');
+  }
+
+  if (!validateNutritionValues(totalNutrition) || ingredients.some(ingredient => !validateNutritionValues(ingredient.scaledNutrition))) {
+    errors.push('Nutrition contains invalid or unsupported values. Confirm ingredients and portions.');
+  }
+  if (ingredients.some(ingredient => ingredient.source === 'estimated')) {
+    warnings.push('Nutrition uses approximate reference values. Recipes and preparation can change the actual calories and macros.');
   }
 
   // Determine if validation passed
@@ -314,14 +284,14 @@ function validateCalorieToMacroRatio(nutrition: {
 }
 
 /**
- * Counts ingredients that used USDA fallback data
+ * Counts ingredients with no matching nutrition reference
  * 
  * @param ingredients - Array of enriched ingredients
- * @returns Count of ingredients using USDA fallback
+ * @returns Count of ingredients using a generic estimate
  */
-function countUSDAFallbacks(ingredients: EnrichedIngredient[]): number {
+function countGenericEstimates(ingredients: EnrichedIngredient[]): number {
   return ingredients.filter(
-    ing => ing.nutrition.foodId === 'usda_fallback'
+    ing => ing.source === 'generic'
   ).length;
 }
 

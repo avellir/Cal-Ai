@@ -2,6 +2,7 @@
 
 # dependencies
 node_modules/
+.cleanup-backups/
 
 # Expo
 .expo/
@@ -42,3 +43,7 @@ app-example
 # generated native folders
 /ios
 /android
+
+# Local food evaluation outputs and reference annotations
+photo-food/evaluation/
+photo-food/reference.json

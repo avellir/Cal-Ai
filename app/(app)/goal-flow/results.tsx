@@ -10,8 +10,9 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { Alert, Animated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { useGoalFlow } from './GoalFlowContext';
+import { Alert, Animated, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text } from '@/components/ui/Text';
+import { useGoalFlow } from '@/components/goal-flow/GoalFlowContext';
 
 type MacroCircleProps = {
   value: number;

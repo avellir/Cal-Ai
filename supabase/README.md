@@ -1,5 +1,8 @@
 # Supabase Migrations
 
+For Azure photo analysis, follow [AZURE_SETUP.md](AZURE_SETUP.md). The `analyze-food`
+Edge Function uses the existing project and requires no changes to the meal tables.
+
 This directory contains SQL migration files for the Cal AI database schema.
 
 ## Applying Migrations

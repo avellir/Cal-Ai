@@ -1,10 +1,10 @@
 module.exports = function (api) {
   api.cache(true);
   return {
-    presets: ['babel-preset-expo'],
+    presets: [['babel-preset-expo', { unstable_transformImportMeta: true }]],
     plugins: [
       // This plugin must be listed LAST.
-      'react-native-reanimated/plugin',
+      'react-native-worklets/plugin',
     ],
   };
 };
