@@ -16,7 +16,7 @@ async function authenticateInBrowser(client, email, supabaseUrl, options = {}) {
   const server = http.createServer(async (request, response) => {
     const send = (status, body) => {
       response.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
+        'Cache-Control': 'no-store', 'Referrer-Policy': 'same-origin',
         'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'" });
       response.end(body);
     };

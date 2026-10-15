@@ -15,7 +15,7 @@ The pipeline preserves detected food identity and quantity, and makes uncertaint
 
 ## Nutrition references
 
-The local table is still an approximate, offline reference. Unknown foods still use a generic estimate with warnings and lower confidence. This is not a live nutrition database integration. Cooking fat, sauces, brands, preparation, density and actual quantities remain sources of error.
+The universal local fallback has been removed. Nutrition now comes from live USDA search/details through the authenticated nutrition-lookup function. Unknown foods remain unresolved and block saving a complete meal total. See [nutrition setup](../supabase/NUTRITION_SETUP.md). Cooking fat, recipes, preparation, actual quantities and incorrect record selection remain sources of error.
 
 Two explicit entries were added from the [USDA SR28 dairy and egg report](https://www.ars.usda.gov/ARSUserFiles/80400525/Data/SR/SR28/reports/sr28fg01.pdf):
 
@@ -38,7 +38,7 @@ The offline comparison preserves the original photo-food/evaluation/service-prob
 
 Redeploy supabase/functions/analyze-food/index.ts using [AZURE_SETUP.md](../supabase/AZURE_SETUP.md). Recognition and refinement prompts now require specific preparation names, visible totals, disjoint regions, one total per food per region, and either dish components or the whole dish. They also require notes for shared pans, missing sectors and uncertain serving scope. Reversed bounding boxes and invalid total plate weights fail validation.
 
-No migration or environment-variable change is needed. Client changes take effect with the rebuilt app; server changes require deployment.
+No migration is needed. Configure server-only USDA_API_KEY and deploy nutrition-lookup plus analyze-food. Client changes take effect when Expo reloads the updated app.
 
 Live evaluation still needs a signed-in Cal AI session. Supabase dashboard GitHub login is a separate session. Use [FOOD_EVALUATION.md](FOOD_EVALUATION.md) to run all photos and retain raw model responses. Record actual ingredient/meal weights and recipe nutrition in photo-food/reference.json before computing accuracy metrics. Multiple fresh runs on the same images are needed to measure vision consistency; cached replay measures client consistency only.
 

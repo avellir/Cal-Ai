@@ -22,5 +22,6 @@ export type MealDraft = {
   userId: string;
   input: AddMealInput;
   originalAnalysis?: AdvancedAnalysisResult;
+  currentAnalysis?: AdvancedAnalysisResult;
   nutritionOverride?: MealMacroSummary & { calories: number };
 };

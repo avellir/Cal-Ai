@@ -1,3 +1,4 @@
+import { lookupFoodNutrition } from '@/services/nutritionLookup';
 import { analyzeFoodImageAdvanced } from '@/services/advancedFoodAnalysis';
 import { adjustBeverageUnits, detectSingleIngredient } from '@/services/advancedFoodEdgeCases';
 import { runPhotoAnalysis } from '@/services/photoAnalysis';
@@ -6,6 +7,7 @@ import { validateAdvancedAnalysis } from '@/services/advancedFoodValidation';
 import type { AdvancedAnalysisResult } from '@/lib/advanced-food-analysis-types';
 
 jest.mock('@/services/photoAnalysis', () => ({ runPhotoAnalysis: jest.fn() }));
+jest.mock('@/services/nutritionLookup', () => ({ lookupFoodNutrition: jest.fn() }));
 const vision = runPhotoAnalysis as jest.Mock;
 type VisibleIngredient = { name: string; weight_grams: number; confidence: number };
 const food = (name: string, weight_grams: number, confidence = 90): VisibleIngredient => ({ name, weight_grams, confidence });
@@ -14,6 +16,15 @@ const recognize = (regions: ReturnType<typeof region>[]) => vision.mockResolvedV
 
 beforeEach(() => {
   vision.mockReset();
+  (lookupFoodNutrition as jest.Mock).mockImplementation(async queries => queries.map((query: string) => {
+    // Fixed provider fixtures isolate recognition/portion behavior from USDA search ranking.
+    const calories: Record<string, number> = { 'scrambled eggs': 149, bread: 265, salmon: 208, chicken: 165 };
+    return { query, candidates: [], match: query === 'orange juice' ? null : {
+      id: 'usda:fixture', name: query, source: 'usda', basisAmount: 100, basisUnit: 'g', servings: [],
+      nutrients: { calories: calories[query] ?? 100, protein: 10, carbs: 10, fat: 2 },
+    } };
+  }));
+
   jest.spyOn(console, 'warn').mockImplementation(() => {});
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -25,8 +36,8 @@ it('keeps a multi-ingredient egg plate and scales each visible quantity once', a
   const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
   expect(result.success).toBe(true);
   expect(result.data?.ingredients.map(ingredient => [ingredient.name, ingredient.quantity])).toEqual([['scrambled eggs', 160], ['bread', 80]]);
-  expect(result.data?.totalNutrition.calories).toBe(450);
-  expect(result.data?.ingredients[0].source).toBe('estimated');
+  expect(result.data?.totalNutrition.calories).toBeCloseTo(450.4);
+  expect(result.data?.ingredients[0].source).toBe('usda');
   expect(result.data?.adjustments).toBeUndefined();
   expect(result.data?.warnings?.join(' ')).toContain('single-serving guideline');
 });
@@ -45,7 +56,7 @@ it('preserves shared-pan amounts and small toppings', async () => {
   const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
   expect(result.success).toBe(true);
   expect(result.data?.ingredients.map(ingredient => ingredient.quantity)).toEqual([400, 2]);
-  expect(result.data?.ingredients[0].scaledNutrition.calories).toBe(832);
+  expect(result.data?.ingredients[0].scaledNutrition?.calories).toBe(832);
 });
 
 it('does not inflate pizza crust or discard visible pepperoni', async () => {
@@ -69,16 +80,16 @@ it('retains the original analysis with a warning when optional topping refinemen
 it('does not double-count a repeated food within a region, but adds different regions', async () => {
   recognize([region('Chicken plate', [food('chicken', 100), food('chicken', 100)]), region('Second plate', [food('chicken', 120)])]);
   const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
-  expect(result.data?.ingredients[0].quantity).toBe(220);
-  expect(result.data?.totalNutrition.calories).toBe(363);
+  expect(result.data?.ingredients.map(ingredient => ingredient.quantity)).toEqual([100, 120]);
+  expect(result.data?.totalNutrition.calories).toBeCloseTo(363);
   expect(result.metadata?.ingredientMergeLog).toBeDefined();
 });
 
-it('keeps steak in grams and preserves the supplied beverage quantity in ml', async () => {
+it('keeps steak in grams and preserves vision mass without inventing a volume conversion', async () => {
   recognize([region('Meal plate', [food('steak', 180), food('orange juice', 273)])]);
   const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
-  expect(result.data?.ingredients.map(ingredient => [ingredient.unit, ingredient.quantity])).toEqual([['g', 180], ['ml', 273]]);
-  expect(result.data?.ingredients[1].source).toBe('generic');
+  expect(result.data?.ingredients.map(ingredient => [ingredient.unit, ingredient.quantity])).toEqual([['g', 180], ['g', 273]]);
+  expect(result.data?.ingredients[1].nutritionStatus).toBe('unresolved');
 });
 
 it.each(['steak', 'milk chocolate', 'wine sauce', 'water chestnuts', 'coffee beans'])

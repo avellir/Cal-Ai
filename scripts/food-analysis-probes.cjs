@@ -19,20 +19,13 @@ require.extensions['.ts'] = function (module, filename) {
   });
   module._compile(compiled.outputText, filename);
 };
-const { lookupIngredientNutrition } = require('../services/localNutrition.ts');
 const { validatePortionSize } = require('../services/portionValidation.ts');
 const after = {
   generatedAt: new Date().toISOString(),
-  scope: 'Offline service probes using the same inputs as the saved baseline. Not live photo analysis or measured nutrition accuracy.',
-  lookup: baseline.lookup.map(({ name }) => {
-    const result = lookupIngredientNutrition({ name, quantity: 100, unit: 'g' });
-    return {
-      name, source: result.source, matchedFoodId: result.foodId,
-      referencePer100g: {
-        calories: result.calories, protein: result.protein, carbs: result.carbs, fat: result.fat,
-      },
-    };
-  }),
+  scope: 'Offline portion probes. Nutrition now requires authenticated USDA lookup; no generic numbers are generated offline.',
+  lookup: baseline.lookup.map(({ name }) => ({
+    name, source: 'unresolved', matchedFoodId: null, referencePer100g: null,
+  })),
   portions: baseline.portions.map(({ name, inputQuantityGrams }) => ({
     name, inputQuantityGrams, ...validatePortionSize(name, inputQuantityGrams, 'g'),
   })),
@@ -62,7 +55,7 @@ const lines = [
   ...after.lookup.flatMap((item, index) => item.matchedFoodId === baseline.lookup[index].matchedFoodId ? [] :
     ['| ' + item.name + ' | ' + baseline.lookup[index].matchedFoodId + ' | ' + item.matchedFoodId + ' |']),
   '',
-  'A generic estimate remains approximate; preventing a false component match does not establish the correct recipe nutrition.',
+  'The generic fallback has been removed. Run live evaluation to obtain USDA matches, source IDs and known subtotals.',
   '',
   '## Additional regression coverage',
   '',

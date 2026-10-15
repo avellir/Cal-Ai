@@ -6,6 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Text } from '@/components/ui/Text';
 import { MealEditor } from '@/components/meal-log/MealEditor';
+import { IngredientEditor } from '@/components/meal-log/IngredientEditor';
+import { hasCompleteNutrition, recalculateAnalysis, replaceAnalysisIngredient } from '@/services/analysisNutrition';
+import type { AnalysisIngredient } from '@/lib/advanced-food-analysis-types';
 import { DesignColors } from '@/constants/theme';
 import { useMealLogStore } from '@/lib/meal-log-store';
 import { useSessionStore } from '@/lib/session-store';
@@ -15,6 +18,7 @@ import { getLoggedAtForDate } from '@/services/mealValidation';
 import { useMealDraftStore } from '@/store/mealDraftStore';
 import {
   getAnalysisAdjustments,
+  analyzeAdvancedFoodImage,
   getAnalysisDisplayName,
   getAnalysisIngredientViews,
   getAnalysisServingSizeLabel,
@@ -52,7 +56,7 @@ export default function FoodResultScreen() {
   const draft = useMealDraftStore(state => state.ownerId === session?.user.id && params.draftId ? state.drafts[params.draftId] : undefined);
 
   const analysisData = useMemo<SuccessfulAnalysisData | null>(() => {
-    if (params.draftId) return draft?.originalAnalysis?.data ?? null;
+    if (params.draftId) return (draft?.currentAnalysis ?? draft?.originalAnalysis)?.data ?? null;
     if (!params.analysisData) return null;
 
     try {
@@ -89,29 +93,53 @@ export default function FoodResultScreen() {
   return <MealReview key={params.draftId ?? params.analysisData} analysisData={analysisData} initialInput={initialInput} draftId={params.draftId} />;
 }
 
-function MealReview({ analysisData, initialInput, draftId }: { analysisData: SuccessfulAnalysisData; initialInput: AddMealInput; draftId?: string }) {
+function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }: { analysisData: SuccessfulAnalysisData; initialInput: AddMealInput; draftId?: string }) {
   const session = useSessionStore(state => state.session);
   const addMeal = useMealLogStore(state => state.addMeal);
   const [mealInput, setMealInput] = useState(initialInput);
+  const [analysisData, setAnalysisData] = useState(initialAnalysisData);
+  const [editingIngredient, setEditingIngredient] = useState<number | null>(null);
+  const [manualOverride, setManualOverride] = useState(initialInput.nutritionStatus === 'complete' && !hasCompleteNutrition(initialAnalysisData));
   const [isEditing, setIsEditing] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
   const [showEstimateDetails, setShowEstimateDetails] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   const ingredients = getAnalysisIngredientViews(analysisData);
   const adjustments = getAnalysisAdjustments(analysisData);
   const portionMultiplier = mealInput.quantity ?? 1;
   const imageUri = mealInput.imageUri;
-  const nutritionEdited = mealInput.calories !== analysisData.totalNutrition.calories ||
+  const nutritionEdited = manualOverride || mealInput.calories !== analysisData.totalNutrition.calories ||
     mealInput.macros.protein !== analysisData.totalNutrition.protein || mealInput.macros.carbs !== analysisData.totalNutrition.carbs ||
     mealInput.macros.fat !== analysisData.totalNutrition.fat;
 
   const updateInput = (input: AddMealInput) => {
+    if (isSaving || isRetrying) return;
     if (draftId && (!session?.user.id || !useMealDraftStore.getState().updateDraft(session.user.id, draftId, input))) {
       Alert.alert('Result unavailable', 'Please scan your meal again.');
       return;
     }
     setMealInput(input);
+    setManualOverride(input.nutritionStatus === 'complete' && (!hasCompleteNutrition(analysisData) || input.calories !== analysisData.totalNutrition.calories || input.macros.protein !== analysisData.totalNutrition.protein || input.macros.carbs !== analysisData.totalNutrition.carbs || input.macros.fat !== analysisData.totalNutrition.fat));
     setIsEditing(false);
+  };
+
+  const nutritionComplete = hasCompleteNutrition(analysisData) || manualOverride;
+  const saveAllowed = manualOverride || (nutritionComplete && analysisData.ingredients.length > 0);
+  const updateIngredients = (nextIngredients: AnalysisIngredient[]) => {
+    if (!session?.user.id || isSaving || isRetrying) return;
+    const next = recalculateAnalysis(analysisData, nextIngredients);
+    if (draftId && !useMealDraftStore.getState().updateAnalysis(session.user.id, draftId, { success: true, data: next })) {
+      Alert.alert('Session expired', 'Please sign in again.');
+      return;
+    }
+    const base = getMealInputFromAnalysis(next, mealInput.quantity ?? 1, mealInput.imageUri, {
+      loggedAt: mealInput.loggedAt, mealType: mealInput.mealType,
+    });
+    setAnalysisData(next);
+    setMealInput({ ...base, name: mealInput.name });
+    setManualOverride(false);
+    setEditingIngredient(null);
   };
 
   const foodName = mealInput.name.trim() || getAnalysisDisplayName(analysisData).trim() || 'Your meal';
@@ -128,12 +156,13 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
   const confidence = Math.round(analysisData.confidence);
   const lowConfidence = confidence < 50;
   const warnings = analysisData.warnings ?? [];
+  const recipeEstimates = analysisData.ingredients.filter(ingredient => ingredient.nutrition?.reference?.matchQuality === 'approximate');
   const genericIngredients = ingredients
-    .filter((ingredient) => ingredient.source === 'generic')
+    .filter((ingredient) => ingredient.unresolved)
     .map((ingredient) => ingredient.name);
 
   const handleSave = async () => {
-    if (isSaving) return;
+    if (isSaving || !saveAllowed) return;
 
     const userId = session?.user?.id;
     if (!userId) {
@@ -147,7 +176,7 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
         loggedAt: mealInput.loggedAt, mealType: mealInput.mealType,
       });
       await addMeal(userId, {
-        ...base, name: mealInput.name, calories: mealInput.calories, macros: mealInput.macros,
+        ...base, name: mealInput.name, calories: mealInput.calories, macros: mealInput.macros, nutritionStatus: nutritionComplete ? 'complete' : 'incomplete',
         note: nutritionEdited ? `${base.note} · Nutrition edited by you` : base.note,
       });
       if (useSessionStore.getState().session?.user.id !== userId) return;
@@ -158,6 +187,25 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
       Alert.alert('Unable to save meal', 'Please try again in a moment.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const retryEstimate = async () => {
+    const userId = session?.user.id;
+    if (!userId || !imageUri || isRetrying || isSaving) return;
+    setIsRetrying(true);
+    try {
+      const result = await analyzeAdvancedFoodImage(imageUri);
+      if (useSessionStore.getState().session?.user.id !== userId) return;
+      if (!result.success || !result.data) throw new Error(result.error || 'Please try a clearer photo.');
+      if (draftId && !useMealDraftStore.getState().updateAnalysis(userId, draftId, result)) throw new Error('Please scan your meal again.');
+      setAnalysisData(result.data);
+      setMealInput({ ...getMealInputFromAnalysis(result.data, portionMultiplier, imageUri, { loggedAt: mealInput.loggedAt, mealType: mealInput.mealType }), name: mealInput.name });
+      setManualOverride(false);
+    } catch (error) {
+      Alert.alert('Estimate unavailable', error instanceof Error ? error.message : 'Please try again shortly.');
+    } finally {
+      setIsRetrying(false);
     }
   };
 
@@ -190,20 +238,21 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
             <Text style={styles.estimateTagText}>{nutritionEdited ? 'Nutrition edited by you' : 'Estimated from photo'}</Text>
           </View>
           <Text style={styles.foodName}>{displayName}</Text>
-          <Text style={styles.servingText}>Estimated portion: {servingLabel}</Text>
+          <Text style={styles.servingText}>{analysisData.ingredients.some(ingredient => ingredient.quantitySource === 'user') ? 'Corrected portion' : 'Estimated portion'}: {servingLabel}</Text>
           <Text style={styles.servingText}>
             {(mealInput.mealType ?? 'snack').toUpperCase()} · {new Date(mealInput.loggedAt!).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
           </Text>
-          <Pressable accessibilityRole="button" onPress={() => setIsEditing(true)} disabled={isSaving} style={styles.editButton}>
+          <Pressable accessibilityRole="button" onPress={() => setIsEditing(true)} disabled={isSaving || isRetrying} style={styles.editButton}>
             <Feather name="edit-2" size={16} color={DesignColors.primary} />
             <Text style={styles.editText}>Edit meal details</Text>
           </Pressable>
           <View style={styles.calorieRow}>
             <Text style={styles.calorieNumber}>≈ {calories}</Text>
-            <Text style={styles.calorieUnit}>calories</Text>
+            <Text style={styles.calorieUnit}>{nutritionComplete ? 'calories' : 'calories known'}</Text>
           </View>
         </View>
 
+        {!nutritionComplete ? <Text style={styles.detailText}>We couldn’t finish this estimate. The numbers include only matched foods. Retry the analysis or take a clearer photo.</Text> : null}
         <View style={styles.portionCard}>
           <View style={styles.sectionHeadingRow}>
             <Text style={styles.sectionTitle}>Portion</Text>
@@ -219,7 +268,7 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
                   accessibilityLabel={`${preset.multiplier} times the estimated portion`}
                   accessibilityState={{ selected }}
                   onPress={() => updateInput({ ...mealInput, quantity: preset.multiplier })}
-                  disabled={isSaving}
+                  disabled={isSaving || isRetrying}
                   style={({ pressed }) => [
                     styles.portionButton,
                     selected && styles.portionButtonSelected,
@@ -266,10 +315,11 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
           />
           <Text style={styles.reviewNoteText}>
             {genericIngredients.length > 0
-              ? `Nutrition for ${genericIngredients.slice(0, 2).join(', ')}${genericIngredients.length > 2 ? ' and others' : ''} uses a rough estimate. Check before saving.`
+              ? 'Some foods could not be estimated automatically this time.'
               : lowConfidence
               ? 'The food was hard to identify. Retake the photo if this looks wrong.'
-              : 'Photo estimates can miss ingredients or cooking oil. Check the portion before saving.'}
+              : recipeEstimates.length > 0 ? 'Estimated using typical recipes. Details are available below.'
+              : 'Estimated from your photo and food nutrition records.'}
           </Text>
         </View>
 
@@ -293,19 +343,21 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
             </Pressable>
             {showIngredients ? (
               <View style={styles.detailBody}>
-                {nutritionEdited ? <Text style={styles.detailText}>Ingredients describe the original estimate. Your edited nutrition is used for the meal total.</Text> : null}
+                {nutritionEdited ? <Text style={styles.detailText}>Your complete meal nutrition override is used for the total. Ingredient values are shown separately; changing an ingredient clears the override.</Text> : null}
                 {ingredients.map((ingredient, index) => (
-                  <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
+                  <Pressable key={`${ingredient.name}-${index}`} accessibilityRole="button" accessibilityLabel={'Correct ' + ingredient.name} disabled={isSaving || isRetrying} onPress={() => setEditingIngredient(index)} style={styles.ingredientRow}>
                     <View style={styles.ingredientInfo}>
                       <Text style={styles.ingredientName}>{ingredient.name}</Text>
                       <Text style={styles.ingredientAmount}>
-                        {formatAmount(ingredient.quantity * portionMultiplier, ingredient.unit)}
+                        {formatAmount(ingredient.quantity * portionMultiplier, ingredient.unit)}{ingredient.quantitySource === 'user' ? ' · Corrected' : ' · Estimated'}
+                        {ingredient.referenceName ? '\n' + ingredient.referenceName : ''}
                       </Text>
                     </View>
                     <Text style={styles.ingredientCalories}>
-                      {Math.round(ingredient.calories * portionMultiplier)} cal
+                      {ingredient.unresolved || ingredient.calories === null ? 'Needs match' : Math.round(ingredient.calories * portionMultiplier) + ' cal'}
+                      <Text style={styles.editText}>{'\n'}Edit</Text>
                     </Text>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             ) : null}
@@ -336,6 +388,12 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
               {warnings.map((warning, index) => (
                 <Text key={`warning-${index}`} style={styles.detailText}>• {warning}</Text>
               ))}
+              {recipeEstimates.map((ingredient, index) => <Text key={`recipe-${index}`} style={styles.detailText}>
+                {ingredient.name}: {ingredient.nutrition?.reference?.matchReason || 'A compatible typical recipe was used.'}
+              </Text>)}
+              {analysisData.ingredients.filter(ingredient => ingredient.estimatedWeightRange && ingredient.quantitySource !== 'user').map((ingredient, index) => <Text key={`range-${index}`} style={styles.detailText}>
+                {ingredient.name}: estimated {Math.round(ingredient.estimatedWeightRange!.min * portionMultiplier)}–{Math.round(ingredient.estimatedWeightRange!.max * portionMultiplier)} g. This range is an estimate from the photo.
+              </Text>)}
               {adjustments.map((adjustment, index) => (
                 <Text key={`adjustment-${index}`} style={styles.detailText}>• {adjustment}</Text>
               ))}
@@ -354,25 +412,36 @@ function MealReview({ analysisData, initialInput, draftId }: { analysisData: Suc
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: isSaving }}
-          onPress={handleSave}
-          disabled={isSaving}
+          accessibilityState={{ disabled: isSaving || isRetrying || (!saveAllowed && !imageUri) }}
+          onPress={saveAllowed ? handleSave : retryEstimate}
+          disabled={isSaving || isRetrying || (!saveAllowed && !imageUri)}
           style={({ pressed }) => [
             styles.saveButton,
-            isSaving && styles.saveButtonDisabled,
+            (isSaving || isRetrying || (!saveAllowed && !imageUri)) && styles.saveButtonDisabled,
             pressed && !isSaving && styles.pressed,
           ]}>
-          {isSaving ? (
+          {isSaving || isRetrying ? (
             <ActivityIndicator size="small" color={DesignColors.white} />
           ) : (
-            <Text style={styles.saveText}>Save meal</Text>
+            <Text style={styles.saveText}>{saveAllowed ? 'Save meal' : 'Retry estimate'}</Text>
           )}
         </Pressable>
       </View>
+      {editingIngredient !== null && analysisData.ingredients[editingIngredient] ? (
+        <Modal visible animationType="slide" onRequestClose={() => setEditingIngredient(null)}>
+          <SafeAreaView style={styles.editorContainer} edges={['top', 'bottom', 'left', 'right']}>
+            <IngredientEditor ingredient={analysisData.ingredients[editingIngredient]}
+              regionAmount={analysisData.ingredients[editingIngredient].regionIndex === undefined ? undefined : analysisData.ingredients.filter(ingredient => ingredient.regionIndex === analysisData.ingredients[editingIngredient].regionIndex && ingredient.unit === 'g').reduce((sum, ingredient) => sum + ingredient.quantity, 0)}
+              onApply={(ingredient, wholeDish) => updateIngredients(replaceAnalysisIngredient(analysisData, editingIngredient, ingredient, wholeDish).ingredients)}
+              onRemove={() => updateIngredients(analysisData.ingredients.filter((_, index) => index !== editingIngredient))}
+              onCancel={() => setEditingIngredient(null)} />
+          </SafeAreaView>
+        </Modal>
+      ) : null}
       {isEditing ? (
         <Modal visible animationType="slide" onRequestClose={() => setIsEditing(false)}>
           <SafeAreaView style={styles.editorContainer} edges={['top', 'bottom', 'left', 'right']}>
-            <MealEditor initialInput={mealInput} onSubmit={updateInput} onCancel={() => setIsEditing(false)} />
+            <MealEditor initialInput={mealInput} requireNutritionEntry={!nutritionComplete} onSubmit={input => updateInput({ ...input, nutritionStatus: 'complete' })} onCancel={() => setIsEditing(false)} />
           </SafeAreaView>
         </Modal>
       ) : null}

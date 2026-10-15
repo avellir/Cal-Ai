@@ -63,9 +63,9 @@ reference sources, regression coverage and live-evaluation limits.
 - Best-effort burst guard: six calls/user/minute per running instance. This is NOT a global spending cap;
   use Azure limits/monitoring and add a persistent shared rate limiter before a public launch.
 - `store: false` disables Responses API response storage; other Azure service retention policies still apply.
-- Nutrition lookup currently uses a small built-in reference table and generic estimates for unknown foods.
-  FatSecret is disabled; no FatSecret credentials are needed. This is NOT a live USDA integration.
-  Verify nutrition quality before distributing the app.
+- Nutrition now uses the authenticated USDA nutrition-lookup function; deploy it and configure
+  USDA_API_KEY using [NUTRITION_SETUP.md](NUTRITION_SETUP.md). Unknown foods require correction
+  instead of receiving generic calories. FatSecret remains disabled.
 
 References: [Azure Responses API](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses),
 [Supabase authentication](https://supabase.com/docs/guides/functions/auth).

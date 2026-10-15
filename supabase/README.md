@@ -1,5 +1,8 @@
 # Supabase Migrations
 
+For USDA nutrition lookup, follow [NUTRITION_SETUP.md](NUTRITION_SETUP.md).
+The nutrition-lookup function uses server-only USDA_API_KEY and requires no schema changes.
+
 For Azure photo analysis, follow [AZURE_SETUP.md](AZURE_SETUP.md). The `analyze-food`
 Edge Function uses the existing project and requires no changes to the meal tables.
 

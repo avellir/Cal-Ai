@@ -85,6 +85,7 @@ export function validateMealEditor(values: MealEditorValues, original: Partial<A
 
 /** Validate typed input again at the persistence boundary, including non-UI callers. */
 export function getMealInputError(input: AddMealInput): string | null {
+  if (input.nutritionStatus === 'incomplete') return 'Resolve missing nutrition or enter a complete meal total before saving.';
   if (!input.name.trim()) return 'Meal name is required.';
   const quantity = input.quantity ?? 1;
   if (!Number.isFinite(quantity) || quantity <= 0) return 'Meal quantity must be a positive finite number.';

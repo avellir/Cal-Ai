@@ -18,6 +18,7 @@ type MealEditorProps = {
   onCancel: () => void;
   isSubmitting?: boolean;
   submitLabel?: string;
+  requireNutritionEntry?: boolean;
 };
 
 const NUTRITION_FIELDS = [
@@ -28,8 +29,8 @@ const NUTRITION_FIELDS = [
 ] as const;
 
 /** Reusable form: values are base-serving nutrition, never pre-scaled totals. */
-export function MealEditor({ initialInput, dateKey, onSubmit, onCancel, isSubmitting = false, submitLabel = 'Apply changes' }: MealEditorProps) {
-  const [values, setValues] = useState(() => getMealEditorValues(initialInput, dateKey));
+export function MealEditor({ initialInput, dateKey, onSubmit, onCancel, isSubmitting = false, submitLabel = 'Apply changes', requireNutritionEntry = false }: MealEditorProps) {
+  const [values, setValues] = useState(() => getMealEditorValues(requireNutritionEntry ? { ...initialInput, calories: undefined, macros: undefined } : initialInput, dateKey));
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const result = validateMealEditor(values, initialInput);
   const errors = hasSubmitted && !result.success ? result.errors : {};
@@ -75,6 +76,7 @@ export function MealEditor({ initialInput, dateKey, onSubmit, onCancel, isSubmit
           <Text style={styles.sectionTitle}>Nutrition per base portion</Text>
           <Text style={styles.hint}>Enter values for one portion. The portion multiplier below applies once.</Text>
           {initialInput?.servingSizeLabel ? <Text style={styles.hint}>Base portion: {initialInput.servingSizeLabel}</Text> : null}
+          <>{requireNutritionEntry ? <Text style={styles.hint}>Enter all four nutrition values for the complete base meal (1×), including foods without a match. Use a label or known recipe; 0 means a confirmed zero.</Text> : null}</>
           <View style={styles.nutritionGrid}>
             {NUTRITION_FIELDS.map(item => field(item.key, `${item.label} (${item.unit})`, '0', true, true))}
           </View>

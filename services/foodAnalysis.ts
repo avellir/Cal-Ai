@@ -3,11 +3,11 @@ import type {
   EnrichedIngredient,
 } from '@/lib/advanced-food-analysis-types';
 import {
-  isEnrichedIngredient,
+  isAnalysisIngredient,
   isFoodRegion,
 } from '@/lib/advanced-food-analysis-types';
 
-import { analyzeFoodImageAdvanced } from './advancedFoodAnalysis';
+import { hasCompleteNutrition } from './analysisNutrition';
 import type { AddMealInput } from '@/lib/meal-log-types';
 
 export type SuccessfulAnalysisData = NonNullable<AdvancedAnalysisResult['data']>;
@@ -23,11 +23,13 @@ export function getMealInputFromAnalysis(
 
   return {
     name: getAnalysisDisplayName(data).trim() || 'Logged meal',
+    nutritionStatus: hasCompleteNutrition(data) ? 'complete' : 'incomplete',
     calories,
     macros: { protein, carbs, fat },
     quantity,
     servingSizeLabel,
-    note: quantity !== 1 ? `${servingSizeLabel} (${quantity}×)` : servingSizeLabel,
+    note: (quantity !== 1 ? `${servingSizeLabel} (${quantity}×)` : servingSizeLabel) +
+      (data.ingredients.some(ingredient => ingredient.nutrition?.reference?.matchQuality === 'approximate') ? ' · Estimated using compatible USDA recipe profiles' : ''),
     imageUri: imageUri || null,
     ...metadata,
   };
@@ -38,10 +40,13 @@ export type FoodAnalysisIngredientView = {
   matchedFoodName: string;
   quantity: number;
   unit: string;
-  calories: number;
-  protein: number;
-  carbs: number;
-  fat: number;
+  calories: number | null;
+  protein: number | null;
+  carbs: number | null;
+  fat: number | null;
+  unresolved: boolean;
+  quantitySource?: 'photo' | 'user';
+  referenceName?: string;
   confidence: number;
   source?: EnrichedIngredient['source'];
   wasAdjusted?: boolean;
@@ -52,6 +57,7 @@ export async function analyzeFoodImage(
   imageUri: string,
   base64Image?: string
 ): Promise<AdvancedAnalysisResult> {
+  const { analyzeFoodImageAdvanced } = await import('./advancedFoodAnalysis');
   return analyzeFoodImageAdvanced(imageUri, base64Image);
 }
 
@@ -78,7 +84,7 @@ export function isSuccessfulAnalysisData(value: unknown): value is SuccessfulAna
     typeof (data.totalNutrition as Record<string, unknown>).fat === 'number' &&
     Array.isArray(data.ingredients) &&
     data.ingredients.every(ingredient =>
-      isEnrichedIngredient(ingredient) &&
+      isAnalysisIngredient(ingredient) &&
       (ingredient.wasAdjusted === undefined || typeof ingredient.wasAdjusted === 'boolean') &&
       (ingredient.adjustmentReason === undefined || typeof ingredient.adjustmentReason === 'string')
     ) &&
@@ -106,7 +112,7 @@ export function getAnalysisDisplayName(data: SuccessfulAnalysisData): string {
   }
 
   if (data.ingredients.length === 1) {
-    return data.ingredients[0].nutrition.foodName || data.ingredients[0].name;
+    return data.ingredients[0].nutrition?.foodName || data.ingredients[0].name;
   }
 
   const regionDescriptions = data.regions
@@ -129,7 +135,9 @@ export function getAnalysisServingSizeLabel(data: SuccessfulAnalysisData): strin
     const [ingredient] = data.ingredients;
 
     if (ingredient.unit === 'serving') {
-      return ingredient.nutrition.servingSize || '1 serving';
+      const serving = ingredient.servingIndex === undefined ? undefined : ingredient.nutrition?.reference?.servings[ingredient.servingIndex];
+      if (serving) return ingredient.quantity + ' × ' + serving.name;
+      return ingredient.nutrition?.servingSize || ingredient.quantity + ' serving';
     }
   }
 
@@ -154,13 +162,16 @@ export function getAnalysisIngredientViews(
 ): FoodAnalysisIngredientView[] {
   return data.ingredients.map(ingredient => ({
     name: ingredient.name,
-    matchedFoodName: ingredient.nutrition.foodName,
+    matchedFoodName: ingredient.nutrition?.foodName ?? ingredient.name,
     quantity: ingredient.quantity,
     unit: ingredient.unit,
-    calories: ingredient.scaledNutrition.calories,
-    protein: ingredient.scaledNutrition.protein,
-    carbs: ingredient.scaledNutrition.carbs,
-    fat: ingredient.scaledNutrition.fat,
+    calories: ingredient.scaledNutrition?.calories ?? null,
+    protein: ingredient.scaledNutrition?.protein ?? null,
+    carbs: ingredient.scaledNutrition?.carbs ?? null,
+    fat: ingredient.scaledNutrition?.fat ?? null,
+    unresolved: ingredient.nutritionStatus === 'unresolved' || ingredient.source === 'generic',
+    quantitySource: ingredient.quantitySource,
+    referenceName: ingredient.nutrition?.reference?.name,
     confidence: ingredient.confidence,
     source: ingredient.source,
     wasAdjusted: ingredient.wasAdjusted,
@@ -186,8 +197,8 @@ export function getConfidenceMessage(confidence: number): string {
   } else if (confidence < 60) {
     return 'Moderate confidence. Please verify the nutritional values and adjust if needed.';
   } else if (confidence < 75) {
-    return 'Good estimate. The nutritional values should be reasonably accurate.';
+    return 'Foods were identified with good confidence. Portions and nutrition still need review.';
   } else {
-    return 'High confidence. The analysis is based on clear visual information.';
+    return 'Foods were identified with high confidence. This does not measure portion or calorie accuracy.';
   }
 }

@@ -19,11 +19,12 @@ export function areIngredientsSimilar(name1: string, name2: string): { isSimilar
   return { isSimilar, reason: isSimilar ? 'same normalized food identity' : 'different food identities' };
 }
 
-export function deduplicateIngredients(ingredients: Ingredient[]): DeduplicationResult {
+export function deduplicateIngredients(ingredients: Ingredient[], preserveRegions = false): DeduplicationResult {
   const groups: Ingredient[][] = [];
   const mergeLog: string[] = [];
   for (const ingredient of ingredients) {
-    const group = groups.find(items => areIngredientsSimilar(items[0].name, ingredient.name).isSimilar &&
+    const group = groups.find(items => (!preserveRegions || items[0].regionIndex === ingredient.regionIndex) && areIngredientsSimilar(items[0].name, ingredient.name).isSimilar &&
+      items[0].preparation === ingredient.preparation &&
       convertToSameUnit(ingredient.quantity, ingredient.unit, items[0].unit) !== null);
     if (group) {
       group.push(ingredient);
@@ -49,6 +50,7 @@ export function deduplicateIngredients(ingredients: Ingredient[]): Deduplication
     const reasons = [...new Set(items.flatMap(item => item.wasAdjusted && item.adjustmentReason ? [item.adjustmentReason] : []))].sort();
     return {
       ...current,
+      estimatedWeightRange: items.length === 1 ? current.estimatedWeightRange : undefined,
       name: items.map(item => item.name).sort((a, b) => b.length - a.length || a.localeCompare(b))[0],
       quantity: unscopedQuantity + [...regionQuantities.values()].reduce((sum, value) => sum + value, 0),
       confidence: Math.min(...items.map(item => item.confidence)),

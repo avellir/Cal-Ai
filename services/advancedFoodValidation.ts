@@ -11,6 +11,7 @@ import type {
     AdvancedAnalysisResult,
     EnrichedIngredient,
 } from '@/lib/advanced-food-analysis-types';
+import { hasCompleteNutrition } from './analysisNutrition';
 
 // ============================================================================
 // Validation Configuration
@@ -76,7 +77,9 @@ export function validateAdvancedAnalysis(
   const originalConfidence = result.data.confidence;
 
   // Perform comprehensive validation
-  const validation = performValidation(totalNutrition, ingredients, originalConfidence);
+  const resolved = ingredients.filter((ingredient): ingredient is EnrichedIngredient => ingredient.nutrition !== null && ingredient.source !== 'generic');
+  const validation = performValidation(totalNutrition, resolved, originalConfidence, hasCompleteNutrition(result.data));
+  if (!hasCompleteNutrition(result.data)) validation.warnings.push('Nutrition incomplete. Resolve every included food or enter a complete meal total before saving.');
 
   // Log validation results
   if (validation.warnings.length > 0) {
@@ -133,7 +136,8 @@ function performValidation(
     fat: number;
   },
   ingredients: EnrichedIngredient[],
-  originalConfidence: number
+  originalConfidence: number,
+  complete = true,
 ): ValidationResult {
   const warnings: string[] = [];
   const errors: string[] = [];
@@ -148,7 +152,7 @@ function performValidation(
   // ========================================================================
   const calorieValidation = validateCalorieToMacroRatio(totalNutrition);
   
-  if (calorieValidation.discrepancy > VALIDATION_CONFIG.MAX_CALORIE_DISCREPANCY) {
+  if (totalNutrition.calories > 0 && calorieValidation.discrepancy > VALIDATION_CONFIG.MAX_CALORIE_DISCREPANCY) {
     warnings.push(
       `High calorie discrepancy: ${(calorieValidation.discrepancy * 100).toFixed(1)}% ` +
       `(calculated: ${calorieValidation.calculatedCalories} cal, reported: ${totalNutrition.calories} cal)`
@@ -208,11 +212,11 @@ function performValidation(
   // ========================================================================
   // 5. Zero Nutrition Check
   // ========================================================================
-  if (totalNutrition.calories === 0) {
+  if (complete && totalNutrition.calories === 0) {
     errors.push('Total calories is zero - invalid nutritional data');
   }
 
-  if (totalNutrition.protein === 0 && totalNutrition.carbs === 0 && totalNutrition.fat === 0) {
+  if (complete && totalNutrition.protein === 0 && totalNutrition.carbs === 0 && totalNutrition.fat === 0) {
     errors.push('All macronutrients are zero - invalid nutritional data');
   }
 

@@ -15,6 +15,8 @@
 /**
  * Food region identified in segmentation stage
  */
+import type { NutritionReference } from '@/lib/nutrition-types';
+
 export type FoodRegion = {
   description: string; // e.g., "main protein on left side of plate"
   dishName?: string; // e.g., "chicken stir-fry"
@@ -67,12 +69,18 @@ export type Ingredient = {
   quantity: number; // numeric value
   unit: string; // e.g., "g", "ml", "oz"
   preparation?: string; // e.g., "grilled", "fried"
+  foodName?: string;
+  visualEvidence?: string;
+  estimatedWeightRange?: { min: number; max: number };
   confidence: number;
   // Validation metadata (added by portion validation)
   regionIndex?: number; // Recognition region provenance for duplicate handling.
   category?: FoodCategory; // Food category for portion validation
   wasAdjusted?: boolean; // Whether portion was adjusted
   adjustmentReason?: string; // Reason for adjustment
+  originalEstimate?: { quantity: number; unit: string };
+  quantitySource?: 'photo' | 'user';
+  servingIndex?: number;
 };
 
 /**
@@ -100,12 +108,14 @@ export type IngredientNutrition = {
   fat: number; // grams
   servingSize: string;
   servingUnit: string;
+  reference?: NutritionReference;
 };
 
 /**
  * Ingredient enriched with nutritional data
  */
 export type EnrichedIngredient = Ingredient & {
+  nutritionStatus?: 'resolved';
   nutrition: IngredientNutrition;
   scaledNutrition: {
     calories: number;
@@ -121,8 +131,18 @@ export type EnrichedIngredient = Ingredient & {
     fat: number;
   };
   servingSize?: number;
-  source?: 'fatsecret' | 'usda' | 'generic' | 'estimated';
+  source?: 'fatsecret' | 'usda' | 'generic' | 'estimated' | 'manual';
 };
+
+export type UnresolvedIngredient = Ingredient & {
+  nutritionStatus: 'unresolved';
+  nutrition: null;
+  scaledNutrition: null;
+  source?: undefined;
+  unresolvedReason: string;
+};
+
+export type AnalysisIngredient = EnrichedIngredient | UnresolvedIngredient;
 
 // ============================================================================
 // Stage 4: Final Analysis Result
@@ -140,7 +160,8 @@ export type AdvancedAnalysisResult = {
       carbs: number;
       fat: number;
     };
-    ingredients: EnrichedIngredient[];
+    ingredients: AnalysisIngredient[];
+    nutritionStatus?: 'complete' | 'incomplete';
     regions: FoodRegion[];
     confidence: number;
     warnings?: string[]; // User-facing warnings about the analysis
@@ -218,7 +239,7 @@ export function isIngredient(value: unknown): value is Ingredient {
     typeof ingredient.name === 'string' &&
     ingredient.name.length > 0 &&
     typeof ingredient.quantity === 'number' &&
-    ingredient.quantity >= 0 &&
+    Number.isFinite(ingredient.quantity) && ingredient.quantity > 0 &&
     typeof ingredient.unit === 'string' &&
     ingredient.unit.length > 0 &&
     typeof ingredient.confidence === 'number' &&
@@ -300,6 +321,16 @@ export function isEnrichedIngredient(value: unknown): value is EnrichedIngredien
 /**
  * Type guard to check if a value is a valid AdvancedAnalysisResult
  */
+export function isAnalysisIngredient(value: unknown): value is AnalysisIngredient {
+  if (!isIngredient(value)) return false;
+  const ingredient = value as Record<string, unknown>;
+  if (ingredient.nutritionStatus === 'unresolved') {
+    return ingredient.nutrition === null && ingredient.scaledNutrition === null &&
+      typeof ingredient.unresolvedReason === 'string';
+  }
+  return isEnrichedIngredient(value);
+}
+
 export function isAdvancedAnalysisResult(value: unknown): value is AdvancedAnalysisResult {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -331,7 +362,7 @@ export function isAdvancedAnalysisResult(value: unknown): value is AdvancedAnaly
     typeof (data.totalNutrition as Record<string, unknown>).carbs === 'number' &&
     typeof (data.totalNutrition as Record<string, unknown>).fat === 'number' &&
     Array.isArray(data.ingredients) &&
-    data.ingredients.every(isEnrichedIngredient) &&
+    data.ingredients.every(isAnalysisIngredient) &&
     Array.isArray(data.regions) &&
     data.regions.every(isFoodRegion) &&
     typeof data.confidence === 'number' &&

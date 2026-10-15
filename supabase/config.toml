@@ -2,3 +2,7 @@
 # The function verifies the bearer token using Supabase Auth /user itself.
 # Supports both legacy and asymmetric project signing keys.
 verify_jwt = false
+
+[functions.nutrition-lookup]
+# This function also authenticates each token through Supabase Auth.
+verify_jwt = false

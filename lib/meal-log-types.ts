@@ -20,6 +20,7 @@ export type MealLogEntry = {
 
 export type AddMealInput = {
   name: string;
+  nutritionStatus?: 'complete' | 'incomplete';
   // Nutrition for one base serving. Quantity is applied when reading the meal.
   calories: number;
   macros: MealMacroSummary;

@@ -4,12 +4,14 @@ import type { AdvancedAnalysisResult } from '@/lib/advanced-food-analysis-types'
 import type { MealDraft } from '@/lib/meal-draft-types';
 import type { AddMealInput } from '@/lib/meal-log-types';
 import { getMealInputError } from '@/services/mealValidation';
+import { getMealInputFromAnalysis } from '@/services/foodAnalysis';
 
 type MealDraftState = {
   ownerId: string | null;
   drafts: Record<string, MealDraft>;
   createDraft: (userId: string, input: AddMealInput, analysis?: AdvancedAnalysisResult) => string;
   updateDraft: (userId: string, draftId: string, input: AddMealInput) => boolean;
+  updateAnalysis: (userId: string, draftId: string, analysis: AdvancedAnalysisResult) => boolean;
   discardDraft: (userId: string, draftId: string) => void;
   reset: () => void;
 };
@@ -21,7 +23,7 @@ export const useMealDraftStore = create<MealDraftState>((set, get) => ({
   drafts: {},
   createDraft: (userId, input, analysis) => {
     if (!userId) throw new Error('Sign in to review a meal.');
-    const error = getMealInputError(input);
+    const error = getMealInputError({ ...input, nutritionStatus: 'complete' });
     if (error) throw new Error(error);
     const id = `meal-${Date.now().toString(36)}-${(++sequence).toString(36)}`;
     const originalAnalysis = analysis ? JSON.parse(JSON.stringify(analysis)) as AdvancedAnalysisResult : undefined;
@@ -32,14 +34,28 @@ export const useMealDraftStore = create<MealDraftState>((set, get) => ({
   updateDraft: (userId, draftId, input) => {
     const state = get();
     const draft = state.drafts[draftId];
-    if (state.ownerId !== userId || !draft || draft.userId !== userId || getMealInputError(input)) return false;
-    const original = draft.originalAnalysis?.data?.totalNutrition;
-    const edited = original && (original.calories !== input.calories || original.protein !== input.macros.protein ||
+    if (state.ownerId !== userId || !draft || draft.userId !== userId || getMealInputError({ ...input, nutritionStatus: 'complete' })) return false;
+    const original = (draft.currentAnalysis ?? draft.originalAnalysis)?.data?.totalNutrition;
+    const edited = original && (input.nutritionStatus === 'complete' && (draft.currentAnalysis ?? draft.originalAnalysis)?.data?.nutritionStatus === 'incomplete' || original.calories !== input.calories || original.protein !== input.macros.protein ||
       original.carbs !== input.macros.carbs || original.fat !== input.macros.fat);
     set({ drafts: { ...state.drafts, [draftId]: {
       ...draft,
       input: { ...input, macros: { ...input.macros } },
       nutritionOverride: edited ? { calories: input.calories, ...input.macros } : undefined,
+    } } });
+    return true;
+  },
+  updateAnalysis: (userId, draftId, analysis) => {
+    const state = get();
+    const draft = state.drafts[draftId];
+    if (state.ownerId !== userId || !draft || draft.userId !== userId || !analysis.success || !analysis.data) return false;
+    const input = getMealInputFromAnalysis(analysis.data, draft.input.quantity ?? 1, draft.input.imageUri, {
+      loggedAt: draft.input.loggedAt, mealType: draft.input.mealType,
+    });
+    set({ drafts: { ...state.drafts, [draftId]: {
+      ...draft, input: { ...input, name: draft.input.name },
+      currentAnalysis: JSON.parse(JSON.stringify(analysis)) as AdvancedAnalysisResult,
+      nutritionOverride: undefined,
     } } });
     return true;
   },

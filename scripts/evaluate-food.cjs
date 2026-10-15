@@ -6,7 +6,7 @@ const Module = require('node:module');
 const { AsyncLocalStorage } = require('node:async_hooks');
 const ts = require('typescript');
 const { createClient } = require('@supabase/supabase-js');
-const { authenticateInteractive } = require('./food-eval-auth.cjs');
+const { authenticateInteractive, verifyEmailInput } = require('./food-eval-auth.cjs');
 const { authenticateInBrowser } = require('./food-eval-browser-auth.cjs');
 
 const root = path.resolve(__dirname, '..');
@@ -58,6 +58,29 @@ require.extensions['.ts'] = function (module, filename) {
 };
 const photoPath = path.join(root, 'services', 'photoAnalysis.ts');
 require.cache[photoPath] = { id: photoPath, filename: photoPath, loaded: true, exports: { runPhotoAnalysis } };
+// Reuse the evaluator's authenticated client instead of loading Expo Supabase globals.
+const nutritionPath = path.join(root, 'services', 'nutritionLookup.ts');
+require.cache[nutritionPath] = { id: nutritionPath, filename: nutritionPath, loaded: true, exports: {
+  lookupFoodNutrition: async (queries, contexts) => {
+    const state = context.getStore();
+    const cacheIndex = state.index++;
+    const cached = state.previous[cacheIndex];
+    if (cached?.mode === 'nutrition' && JSON.stringify(cached.queries) === JSON.stringify(queries) && JSON.stringify(cached.contexts) === JSON.stringify(contexts)) {
+      state.calls.push(cached);
+      return cached.result;
+    }
+    if (args.includes('--replay')) throw new Error('Missing cached nutrition lookup; run live evaluation first.');
+    const { data, error } = await client.functions.invoke('nutrition-lookup', {
+      body: contexts ? { mode: 'resolve', queries, contexts } : { mode: 'batch', queries }, signal: AbortSignal.timeout(65000),
+    });
+    if (error || !Array.isArray(data?.results)) throw new Error('Nutrition lookup failed. Deploy the function and configure USDA_API_KEY.');
+    const result = queries.map((query, index) => (contexts ? data.results[index] : data.results.find(item => item.query === query)) || {
+      query, match: null, candidates: [], reason: 'No matching nutrition reference.',
+    });
+    state.calls.push({ mode: 'nutrition', queries, contexts, result });
+    return result;
+  },
+} };
 const { analyzeFoodImageAdvanced } = require('../services/advancedFoodAnalysis.ts');
 
 const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
@@ -91,11 +114,25 @@ async function main() {
     }
     client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: true } });
     const authOptions = { shouldCreateUser: args.includes('--signup') };
-    if (args.includes('--browser-auth') && !password) {
+    if (process.env.FOOD_EVAL_CODE) {
+      const code = process.env.FOOD_EVAL_CODE;
+      delete process.env.FOOD_EVAL_CODE;
+      const verified = await verifyEmailInput(client, email, code, url);
+      if (verified.error || !verified.data?.session) throw new Error('The supplied email code could not be verified. Request a new sign-in email.');
+    } else if (args.includes('--browser-auth') && !password) {
       await authenticateInBrowser(client, email, url, authOptions);
     } else {
       await authenticateInteractive(client, email, password, url, authOptions);
     }
+    const { data: probe, error: probeError } = await client.functions.invoke('nutrition-lookup', {
+      body: { mode: 'batch', queries: ['pancakes', 'rice crispbread', 'cooked buckwheat'] },
+      signal: AbortSignal.timeout(30000),
+    });
+    fs.writeFileSync(path.join(output, 'usda-live-preflight.json'), JSON.stringify({
+      timestamp: new Date().toISOString(), success: !probeError, results: probe?.results || [],
+      error: probeError ? 'Nutrition function request failed.' : undefined,
+    }, null, 2));
+    console.log(`USDA preflight: ${probeError ? 'request failed' : (probe?.results || []).filter(item => item.match).length + '/3 automatic matches'}`);
   }
   const sharp = require('sharp');
   const references = JSON.parse(fs.readFileSync(referencePath, 'utf8'));
@@ -112,6 +149,9 @@ async function main() {
       const expected = references.find(item => item.filename === filename);
       const actual = result.data?.totalNutrition;
       const row = { filename, success: result.success, error: result.error,
+        nutritionStatus: result.data?.nutritionStatus,
+        resolvedIngredients: result.data?.ingredients.filter(item => item.nutritionStatus !== 'unresolved').length,
+        ingredientCount: result.data?.ingredients.length,
         foods: result.data?.ingredients.map(item => item.name).join('; '),
         ...actual, confidence: result.data?.confidence,
         warnings: result.data?.warnings?.join('; '), processingTimeMs: result.metadata?.processingTimeMs };

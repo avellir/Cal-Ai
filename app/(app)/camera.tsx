@@ -202,7 +202,7 @@ export default function CameraScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={DesignColors.black} />
         <Text style={styles.loadingText}>Analyzing your food...</Text>
-        <Text style={styles.loadingSubtext}>This may take a few seconds</Text>
+        <Text style={styles.loadingSubtext}>Identifying foods and looking up nutrition</Text>
       </View>
     );
   }

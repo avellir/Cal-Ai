@@ -4,7 +4,7 @@
  * Coordinates the optimized food analysis pipeline:
  * 1. Combined Segmentation + Decomposition (Single Azure API call)
  * 2. Edge Case Detection (no-food, packaged labels, beverages, etc.)
- * 3. Nutritional Lookup (built-in reference estimates)
+ * 3. Automatic USDA record selection using food and preparation context
  * 4. Validation and Aggregation
  * 
  * One recognition call per image, plus optional topping refinement or label reading.
@@ -12,14 +12,13 @@
 
 import {
     AdvancedAnalysisResult,
-    EnrichedIngredient,
+    AnalysisIngredient,
     FoodRegion,
     Ingredient,
     SegmentationResult
 } from '@/lib/advanced-food-analysis-types';
 import {
     detectEdgeCases,
-    adjustBeverageUnits,
     extractNutritionFromLabel
 } from './advancedFoodEdgeCases';
 import {
@@ -29,7 +28,8 @@ import {
     withErrorHandling
 } from './advancedFoodErrorHandling';
 import { validateAdvancedAnalysis } from './advancedFoodValidation';
-import { lookupIngredientNutrition } from './localNutrition';
+import { lookupFoodNutrition } from './nutritionLookup';
+import { resolveIngredient, unresolvedIngredient, recalculateAnalysis } from './analysisNutrition';
 import { runPhotoAnalysis, convertImageToBase64 } from './photoAnalysis';
 import { deduplicateIngredients } from './ingredientDeduplication';
 import { validatePortionSize } from './portionValidation';
@@ -47,6 +47,11 @@ type VisionIngredient = {
     weight_grams: number;
     confidence: number;
     visual_evidence?: string;
+    food_name?: string;
+    preparation?: string;
+    representation?: 'whole_dish' | 'component';
+    weight_min_grams?: number;
+    weight_max_grams?: number;
 };
 
 /**
@@ -230,6 +235,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
         // 2.1 Optional layered-dish refinement (pizza/flatbread/toast)
         const layeredCandidateIndex = combinedResult.regions.findIndex(region =>
+            !region.ingredients?.some(ingredient => ingredient.representation === 'whole_dish') &&
             (isLayeredDishRegion(region.description, region.dishName) || hasLayeredIngredient(region.ingredients)) &&
             (region.ingredients?.length ?? 0) <= 2
         );
@@ -329,6 +335,14 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             unit: 'g',
             confidence: ing.confidence,
             regionIndex: ing.regionIndex,
+            quantitySource: 'photo',
+            originalEstimate: { quantity: ing.weight_grams, unit: 'g' },
+            foodName: ing.food_name,
+            preparation: ing.preparation,
+            visualEvidence: ing.visual_evidence,
+            estimatedWeightRange: typeof ing.weight_min_grams === 'number' && typeof ing.weight_max_grams === 'number' &&
+                ing.weight_min_grams > 0 && ing.weight_min_grams <= ing.weight_grams && ing.weight_max_grams >= ing.weight_grams
+                ? { min: ing.weight_min_grams, max: ing.weight_max_grams } : undefined,
         }));
 
         // Keep the structured ingredient names and weights; region captions are
@@ -353,7 +367,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                     }
                     return {
                         ...ing,
-                        unit: 'ml',
+                        unit: 'g',
                         quantity: normalization.adjustedQuantity,
                         confidence: Math.max(0, ing.confidence - normalization.confidencePenalty),
                         wasAdjusted: normalization.wasAdjusted ? true : ing.wasAdjusted,
@@ -387,8 +401,8 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
         // 3.6 Merge repeated labels within regions and add separate portions.
         stagesCompleted.push('dedupe');
-        const dedupe = deduplicateIngredients(ingredientsForProcessing);
-        ingredientsForProcessing = dedupe.uniqueIngredients;
+        const dedupe = deduplicateIngredients(ingredientsForProcessing, true);
+        ingredientsForProcessing = dedupe.uniqueIngredients.map(ingredient => ({ ...ingredient, originalEstimate: { quantity: ingredient.quantity, unit: ingredient.unit } }));
         if (dedupe.mergedCount > 0) {
             warnings.push(`Merged ${dedupe.mergedCount} duplicate ingredient(s) for consistency.`);
         }
@@ -401,39 +415,33 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         }
 
         // 3.8 Normalize beverage units (e.g., milk/coffee) to volume where applicable
-        ingredientsForProcessing = adjustBeverageUnits(ingredientsForProcessing);
+        // Vision returns grams. Keep mass units until the user chooses a supported volume basis.
 
         // 4. Nutritional Lookup
         stagesCompleted.push('lookup');
 
-        const lookupPromises = ingredientsForProcessing.map(async (ingredient) => {
-            const result = await lookupIngredientNutrition(ingredient);
-            if (result) {
-                let finalConfidence = ingredient.confidence;
-                finalConfidence -= result.confidencePenalty;
-
-                return {
-                    ...ingredient,
-                    nutrition: {
-                        foodId: result.foodId,
-                        foodName: result.foodName,
-                        calories: result.calories,
-                        protein: result.protein,
-                        carbs: result.carbs,
-                        fat: result.fat,
-                        servingSize: result.servingSize,
-                        servingUnit: result.servingUnit
-                    },
-                    scaledNutrition: result.scaledNutrition,
-                    source: result.source,
-                    confidence: Math.max(0, finalConfidence)
-                } as EnrichedIngredient;
+        let lookups: Awaited<ReturnType<typeof lookupFoodNutrition>> = [];
+        try {
+            lookups = await lookupFoodNutrition(ingredientsForProcessing.map(ingredient => ingredient.name), ingredientsForProcessing.map(ingredient => ({
+                foodName: ingredient.foodName ?? ingredient.name,
+                preparation: ingredient.preparation ?? 'unknown',
+                dishName: segmentationData.regions[ingredient.regionIndex ?? 0]?.dishName ?? '',
+                visualEvidence: ingredient.visualEvidence?.slice(0, 200) ?? '',
+            })));
+        } catch (error) {
+            warnings.push(error instanceof Error ? error.message : 'Nutrition lookup is unavailable.');
+        }
+        const validIngredients: AnalysisIngredient[] = ingredientsForProcessing.map((ingredient, index) => {
+            const lookup = lookups[index];
+            if (!lookup?.match) {
+                return unresolvedIngredient(ingredient, lookup?.reason ?? 'Search for this food or enter nutrition manually.');
             }
-            return null;
+            try {
+                return resolveIngredient(ingredient, lookup.match);
+            } catch (error) {
+                return unresolvedIngredient(ingredient, error instanceof Error ? error.message : 'Confirm the portion unit.');
+            }
         });
-
-        const lookupResults = await Promise.all(lookupPromises);
-        const validIngredients = lookupResults.filter((i): i is EnrichedIngredient => i !== null);
         const adjustments = Array.from(
             new Set(
                 validIngredients.flatMap(ingredient =>
@@ -446,12 +454,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
 
         // 5. Aggregation & Validation
         stagesCompleted.push('aggregation');
-        const totalNutrition = validIngredients.reduce((acc, ing) => ({
-            calories: acc.calories + ing.scaledNutrition.calories,
-            protein: acc.protein + ing.scaledNutrition.protein,
-            carbs: acc.carbs + ing.scaledNutrition.carbs,
-            fat: acc.fat + ing.scaledNutrition.fat
-        }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        const totalNutrition = { calories: 0, protein: 0, carbs: 0, fat: 0 };
 
         const initialResult: AdvancedAnalysisResult = {
             success: true,
@@ -472,7 +475,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         };
 
         // Run Final Validation
-        const validatedResult = validateAdvancedAnalysis(initialResult);
+        const validatedResult = validateAdvancedAnalysis({ ...initialResult, data: recalculateAnalysis(initialResult.data!, validIngredients) });
 
         return validatedResult;
 

@@ -17,13 +17,16 @@ RULES:
 - Return a layered dish's components OR the complete dish, never both
 - Focus on the main served meal and clearly served accompanying drinks. Exclude background supplies, loose styling ingredients and other diners' food; explain ambiguous scope in notes
 - For pans/shared platters and missing pizza sectors, estimate only what is visible; mention that consumed serving size requires confirmation
+- Include raw/cooked/dry preparation in ingredient names when identifiable, especially for pasta, rice and proteins. Do not claim an unseen recipe or brand.
+- For a soup, stew or curry, return the complete dish OR its disjoint liquid and solid components; never use the complete dish's weight for its liquid component.
 - Use specific food names and retain preparation (e.g. scrambled eggs, cooked penne pasta). Do not rename an unknown sauce as a specific recipe
 - DO NOT infer hidden ingredients (oils, butter, salt) unless visually evident
 - Include structural components (bun, crust, bread) even if partially hidden
-- For layered foods (pizza, toast, flatbreads), list the base (dough/crust/bread) AND each visible topping as separate ingredients
-- Ensure visible meats, cheeses, and greens are listed as distinct ingredients when present
+- For recognizable prepared dishes with inseparable ingredients (pizza, cheesecake, borscht, stew, curry), prefer one whole_dish entry with an ordinary recipe identity. Do not also list its internal ingredients. Separate sides remain separate.
+- For simple plates and visibly separate foods, use component entries. Separate toppings only when not already included in a whole_dish entry.
+- For component representation, list visible meats, cheeses, and greens separately. Never repeat ingredients already covered by a whole_dish entry.
 - If a protein is visible but its exact type is unclear, use a generic label (e.g., "meat", "shredded meat", "deli meat")
-- Include visible garnishes like herbs or citrus (e.g., cilantro, parsley, basil, lime, lemon) as separate ingredients
+- Include visible garnishes separately only when not already covered by a whole_dish entry.
 - Keep descriptions SHORT (1-3 words max)
 - Limit to MAX 10 ingredients per region
 - Return at most 6 regions. All confidence values must be numbers from 0 to 100.
@@ -37,6 +40,10 @@ Dairy: mozzarella 80-120, cheese slice 20, yogurt dollop 25-40
 Vegetables: leafy greens 30-40, dense veg 60-80
 Small items: cherry tomato about 10 each; herbs can be a few grams; sauces vary by visible amount
 Use visible counts and container size; never force portions to these examples.
+Estimate the edible served mass using visible counts, coverage, thickness and container context. A plate diameter inferred from appearance is an assumption, not a measured scale.
+Give weight_min_grams and weight_max_grams as a plausible uncertainty range containing weight_grams. Missing scale, occlusion and shared pans require wider ranges. Do not claim calibrated accuracy.
+food_name is a clean food identity for database search, without piece counts, presentation annotations, or parentheses. preparation describes raw/cooked/baked/etc., or unknown. Fresh salad vegetables should say raw when visibly uncooked.
+Keep name and dishName natural and stable for display. Do not substitute a different dish just because its nutrition may be easier to look up.
 
 OUTPUT FORMAT:
 {
@@ -45,7 +52,7 @@ OUTPUT FORMAT:
     "dishName": "dish name",
     "confidence": 0-100,
     "boundingBox": {"ymin":0,"xmin":0,"ymax":1000,"xmax":1000},
-    "ingredients": [{"name":"ingredient","weight_grams":100,"confidence":80,"visual_evidence":"visible"}]
+    "ingredients": [{"name":"ingredient","food_name":"ingredient","preparation":"cooked","representation":"component","weight_grams":100,"weight_min_grams":70,"weight_max_grams":140,"confidence":80,"visual_evidence":"visible"}]
   }],
   "overallConfidence": 0-100,
   "total_plate_weight_grams": 0,
@@ -98,15 +105,20 @@ const textSchema = { type: 'string' };
 const numberSchema = { type: 'number' };
 const ingredientSchema = objectSchema({
   name: textSchema, weight_grams: numberSchema, confidence: numberSchema, visual_evidence: textSchema,
+  food_name: textSchema, preparation: textSchema,
+  representation: { type: 'string', enum: ['whole_dish', 'component'] },
+  weight_min_grams: numberSchema, weight_max_grams: numberSchema,
 });
 const ingredientsSchema = { type: 'array', items: ingredientSchema };
 const schemas = {
   analyze: objectSchema({
-    regions: { type: 'array', items: objectSchema({
-      description: textSchema, dishName: textSchema, confidence: numberSchema,
-      boundingBox: objectSchema({ ymin: numberSchema, xmin: numberSchema, ymax: numberSchema, xmax: numberSchema }),
-      ingredients: ingredientsSchema,
-    }) },
+    regions: {
+      type: 'array', items: objectSchema({
+        description: textSchema, dishName: textSchema, confidence: numberSchema,
+        boundingBox: objectSchema({ ymin: numberSchema, xmin: numberSchema, ymax: numberSchema, xmax: numberSchema }),
+        ingredients: ingredientsSchema,
+      })
+    },
     overallConfidence: numberSchema, total_plate_weight_grams: numberSchema, notes: textSchema,
   }),
   refine: objectSchema({ ingredients: ingredientsSchema }),
@@ -141,7 +153,12 @@ function finite(value: unknown, min = 0, max = 100): boolean {
 function validIngredients(value: unknown): boolean {
   return Array.isArray(value) && value.length <= 10 && value.every(i => isObject(i) &&
     typeof i.name === 'string' && i.name.trim().length > 0 && i.name.length <= 200 &&
-    finite(i.weight_grams, 0.01, 10_000) && finite(i.confidence));
+    finite(i.weight_grams, 0.01, 10_000) && finite(i.confidence) &&
+    (i.food_name === undefined || typeof i.food_name === 'string' && i.food_name.trim().length > 0 && i.food_name.length <= 200) &&
+    (i.preparation === undefined || typeof i.preparation === 'string' && i.preparation.length <= 100) &&
+    (i.representation === undefined || i.representation === 'whole_dish' || i.representation === 'component') &&
+    (i.weight_min_grams === undefined && i.weight_max_grams === undefined ||
+      finite(i.weight_min_grams, 0.01, i.weight_grams as number) && finite(i.weight_max_grams, i.weight_grams as number, 10_000)));
 }
 export function validResult(value: unknown, mode: Mode): boolean {
   if (!isObject(value)) return false;
@@ -173,6 +190,13 @@ export function invalidResultFields(value: unknown, mode: Mode): string[] {
       check(typeof item.name === 'string' && item.name.trim().length > 0 && item.name.length <= 200, `${field}.name`);
       check(finite(item.weight_grams, 0.01, 10_000), `${field}.weight_grams`);
       check(finite(item.confidence), `${field}.confidence`);
+      check(item.food_name === undefined || typeof item.food_name === 'string' && item.food_name.trim().length > 0 && item.food_name.length <= 200, `${field}.food_name`);
+      check(item.preparation === undefined || typeof item.preparation === 'string' && item.preparation.length <= 100, `${field}.preparation`);
+      check(item.representation === undefined || item.representation === 'whole_dish' || item.representation === 'component', `${field}.representation`);
+      if (item.weight_min_grams !== undefined || item.weight_max_grams !== undefined) {
+        check(finite(item.weight_min_grams, 0.01, item.weight_grams as number), `${field}.weight_min_grams`);
+        check(finite(item.weight_max_grams, item.weight_grams as number, 10_000), `${field}.weight_max_grams`);
+      }
     });
   };
   if (mode === 'refine') { ingredients(value.ingredients, 'ingredients'); return invalid; }
@@ -280,16 +304,20 @@ export async function handleRequest(request: Request, deps: Dependencies): Promi
       body: JSON.stringify({
         model: deployment, store: false, instructions: SAFETY_PROMPT,
         reasoning: { effort: 'low' }, max_output_tokens: 6000,
-        input: [{ role: 'user', content: [
-          { type: 'input_text', text: prompt },
-          { type: 'input_image', image_url: `data:image/jpeg;base64,${base64Image}`, detail: 'high' },
-        ] }],
+        input: [{
+          role: 'user', content: [
+            { type: 'input_text', text: prompt },
+            { type: 'input_image', image_url: `data:image/jpeg;base64,${base64Image}`, detail: 'high' },
+          ]
+        }],
         text: { format: { type: 'json_schema', name: `food_${mode}`, strict: true, schema: schemas[mode] } },
       }),
     });
     if (!azure.ok) {
-      return json({ error: azure.status === 429 ? 'Photo analysis is busy. Please try again shortly.' :
-        'Azure could not analyze this photo. Check the deployment settings or try another photo.' }, azure.status === 429 ? 429 : 502);
+      return json({
+        error: azure.status === 429 ? 'Photo analysis is busy. Please try again shortly.' :
+          'Azure could not analyze this photo. Check the deployment settings or try another photo.'
+      }, azure.status === 429 ? 429 : 502);
     }
     const response = await azure.json();
     if (response.status !== 'completed') return json({ error: 'Analysis was incomplete. Please try a clearer photo.' }, 502);
@@ -306,8 +334,10 @@ export async function handleRequest(request: Request, deps: Dependencies): Promi
     }
     return json({ result });
   } catch {
-    return json({ error: controller.signal.aborted ? 'Photo analysis timed out. Please try again.' :
-      'Photo analysis is unavailable. Please try again shortly.' }, controller.signal.aborted ? 504 : 502);
+    return json({
+      error: controller.signal.aborted ? 'Photo analysis timed out. Please try again.' :
+        'Photo analysis is unavailable. Please try again shortly.'
+    }, controller.signal.aborted ? 504 : 502);
   } finally {
     clearTimeout(timeout);
   }
