@@ -8,7 +8,7 @@ This file carries only the current handoff. GitHub Issues own task scope/status;
 - Branch: `chore/development-workflow`, in the separate worktree `C:/Temp/cal-ai-workflow-20261029`.
 - PR: [draft #3](https://github.com/avellir/Cal-Ai/pull/3), targeting `main`.
 - Latest decision: use local verification; GitHub Actions is deferred. Its workflow file is removed from the proposal. The GitHub billing lock is not a prerequisite for this local process.
-- State: implementation is verified and being published to PR #3; review/merge remains the next decision. Resume that decision rather than recreating the setup.
+- State: implementation is verified and published to PR #3; review/merge remains the next decision. Resume that decision rather than recreating the setup.
 - Implemented: priorities, issue/PR templates, contribution/agent instructions, `npm run verify`, and this startup/handoff routine. A Project board and unattended agent loop are not configured.
 
 ## Preserve current application work
