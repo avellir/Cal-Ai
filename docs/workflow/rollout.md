@@ -4,6 +4,8 @@
 
 Use local verification. GitHub Actions is deferred at the user's request, and its workflow file has been removed from [PR #3](https://github.com/avellir/Cal-Ai/pull/3). The earlier account billing lock does not block this process. Required hosted status checks are not part of the current setup.
 
+Check execution follows [the user's testing schedule](../../CONTRIBUTING.md#testing-schedule): explicit requests or a clear end-of-day cue only. Session boundaries, commits and PR merges do not automatically run checks.
+
 ## Transition checklist
 
 - [x] Research Matt Pocock's workflow and inspect the actual Git/GitHub state.
@@ -35,7 +37,7 @@ The original workspace remains on its original feature branch. Its checkpoint is
 
 1. Open a fresh Codex task in the repository and say: "Continue Cal AI from the saved handoff."
 2. Codex reads `AGENTS.md`, the current handoff and linked issue; it resumes unfinished work or selects one ready issue.
-3. Codex uses one branch per task, implements a complete small outcome, runs local verification, and prepares commits/PR evidence.
+3. Codex uses one branch per task, implements a complete small outcome, and prepares commits/PR evidence. It runs local verification only when requested or during the authorized end-of-day test session.
 4. At a session boundary, Codex saves the next action and unfinished work in the handoff and updates the task/PR when authorized. A new chat resumes from these records.
 5. Review, merge and deployment are separate decisions. After merge, the next task starts from updated `main`.
 

@@ -8,6 +8,7 @@ Use the smallest useful diff sketch, call tree or diagram to show its shape. -->
 - **Before:**
   **After:**
 - **Checks:**
+<!-- State actual results and their source/date, or "Not run, per requested testing schedule." -->
 - **Device/UI QA:**
 - **Deployment, environment or migration steps:**
 

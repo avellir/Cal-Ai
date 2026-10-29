@@ -6,7 +6,7 @@ GitHub repository: [avellir/Cal-Ai](https://github.com/avellir/Cal-Ai). `main` i
 flowchart LR
   A[Idea or bug] --> B[Issue with acceptance criteria]
   B --> C[Branch for one outcome]
-  C --> D[Implement and check]
+  C --> D[Implement]
   D --> E[Commit and push]
   E --> F[PR review and device QA]
   F --> G[Squash merge to main]
@@ -35,9 +35,16 @@ git fetch origin
 git worktree add ../Cal-Ai-workflow -b chore/123-workflow origin/main
 ```
 
-## Implement and verify
+## Testing schedule
 
-Use Node 24 (see `.nvmrc`) and `npm ci`. Run focused behavior checks while implementing. The standard checks before marking a PR ready are:
+Tests and other executable checks are opt-in, following the user's preference:
+
+- Run them when explicitly requested. A request for a focused test authorizes that scope, not an automatic full verification run.
+- A clear end-of-day cue such as "I'm done for today" authorizes one batched daily verification session. Run the relevant checks for accumulated untested changes; reuse still-applicable results for unchanged source rather than repeating a full run without reason.
+- Routine questions, programming edits, commits, PR creation/merging and session handoffs do not trigger tests, typecheck, lint, builds or exports. Do not add automatic hooks or scheduled checks without an explicit request.
+- Keep untested changes and the last actual results visible in the handoff and PR. Use "Not rerun, per requested testing schedule" where appropriate. Completion of coding or a merge must not be described as a test pass.
+
+During an authorized test session, investigate failures with focused checks. Repeat a full suite only when subsequent changes or unresolved concerns justify it. For a requested full verification session, use Node 24 (see `.nvmrc`) and:
 
 ```powershell
 npm run verify -- --base origin/main
@@ -51,7 +58,7 @@ Changed-file lint includes committed, staged, unstaged and untracked source file
 
 Verification is local for now; no GitHub Actions workflow is installed by this PR. The runner uses mocked tests and exports without dotenv/provider credentials, live meal writes or paid analysis requests. The export checks bundling; camera, permissions, keyboard, navigation and native behavior still need device QA when affected.
 
-For a food-analysis behavior change, compare suitable saved inputs and add a regression for the actual failure. Fresh vision evaluation and live nutrition checks are separate, explicit provider operations. Keep credentials in local ignored environment files or Supabase secrets. Apply migrations and deploy Edge Functions as explicit release steps with the PR's version and validation recorded; a code merge alone does not update Supabase.
+For food-analysis validation requested by the user, compare suitable saved inputs and cover the actual failure. Fresh vision evaluation and live nutrition checks are separate, explicit provider operations. Keep credentials in local ignored environment files or Supabase secrets. Apply migrations and deploy Edge Functions as explicit release steps with the PR's version and validation recorded; a code merge alone does not update Supabase.
 
 ## Commit, review and merge
 
@@ -59,7 +66,7 @@ For a food-analysis behavior change, compare suitable saved inputs and add a reg
 2. Commit with a concrete message, for example `fix(nutrition): preserve healthy matches when one detail fails`, and push the branch using `git push -u origin <branch>`.
 3. Open a draft PR early if useful. Link its issue with `Closes #123`. Use the PR template to show the change, before/after evidence, checks, release steps and material risks.
 4. Review committed work against the issue and the fixed branch base, ideally in a fresh agent session. Check both repository standards and acceptance criteria. Record unperformed device/live checks honestly.
-5. Mark ready when required local verification passes and affected behavior has been exercised. Attach the results and explain the separately reported full-lint debt. For solo work, the author performs the QA/merge decision; requiring another person's approval is optional when another reviewer is available.
+5. Record the last actual validation results, any untested changes and the separately reported full-lint debt. Run new verification only under the testing schedule above. Mark ready after review with that evidence stated honestly. For solo work, the author performs the QA/merge decision; requiring another person's approval is optional when another reviewer is available.
 6. Squash merge the PR into `main`, then remove the merged remote branch. Delete a local branch only after checking that it is merged or that its work is preserved. Start the next task from updated `main`.
 
 PR merging and production deployment remain explicit actions. Local verification does not deploy the app or Edge Functions.
@@ -74,10 +81,12 @@ The templates become the repository defaults when merged. Repository rules and a
 
 Open a fresh task thread in this repository and say:
 
-> Continue Cal AI. Read the saved handoff and GitHub issue, resume unfinished work or choose the next ready task, use its own branch, run local verification, and save progress to GitHub and the handoff.
+> Continue Cal AI. Read the saved handoff and GitHub issue, resume unfinished work or choose the next ready task, use its own branch, and save progress to GitHub and the handoff. Follow the requested testing schedule.
 
 `AGENTS.md` directs the agent to [one current handoff](docs/workflow/session.md). It stores the active issue, branch/PR, check evidence, remaining work and next action; the GitHub issue remains authoritative for scope and status. Update the handoff at the end of each session. Resume the same branch for unfinished work. After completion and merge, select the next ready issue and start its branch from updated `main`.
 
 These are instructions followed while Codex is running, plus an executable verification command. No unattended agent service is running between sessions.
+
+At the end of the day, say: "I'm done for today; run the daily checks." That starts the requested test session. The agent cannot infer that an unanswered conversation has ended and does not run background tests after you leave.
 
 For large features, discuss decisions before creating the spec/tickets. Current Matt Pocock names are `to-spec` and `to-tickets`; older videos use PRD/issue names. Invoke only skills installed in the current client. Our branch naming and one-PR-per-task convention adapt his approach to this repository. [Research and primary sources](docs/workflow/matt-pocock-research.md).

@@ -6,9 +6,9 @@ This file carries only the current handoff. GitHub Issues own task scope/status;
 
 - Task: [workflow setup, issue #2](https://github.com/avellir/Cal-Ai/issues/2).
 - Branch: `chore/development-workflow`, in the separate worktree `C:/Temp/cal-ai-workflow-20261029`.
-- PR: [draft #3](https://github.com/avellir/Cal-Ai/pull/3), targeting `main`.
+- PR: [#3](https://github.com/avellir/Cal-Ai/pull/3), targeting `main`; check its live merge status.
 - Latest decision: use local verification; GitHub Actions is deferred. Its workflow file is removed from the proposal. The GitHub billing lock is not a prerequisite for this local process.
-- State: implementation is verified and published to PR #3; review/merge remains the next decision. Resume that decision rather than recreating the setup.
+- State: implementation was verified and published. The user has now authorized merging PR #3 and requested tests only on explicit request or a clear end-of-day cue. This policy-only revision was not retested. If PR #3 is merged, treat setup as landed and continue with recovery issue #4 rather than recreating it.
 - Implemented: priorities, issue/PR templates, contribution/agent instructions, `npm run verify`, and this startup/handoff routine. A Project board and unattended agent loop are not configured.
 
 ## Preserve current application work
@@ -28,11 +28,11 @@ Completed local verification on 2026-10-29:
 
 Both final reports have `success: true` for required checks and `sourceChangedDuringRun: false`; the existing full-lint debt is explicitly `audit_failed`. Jest now discovers only the real root test folder, excluding archived backup copies.
 
-Run `npm run verify -- --base origin/main` in the workspace being evaluated. Read `.cleanup-backups/local-checks/latest.json` there for the actual checked branch/commit/source fingerprint, per-check results and log paths. These are separate source snapshots; the workflow PR does not contain the newer application integration. No device QA, live provider request, meal write or production deployment was performed for this workflow change.
+When the user requests verification or clearly finishes work for the day, use `npm run verify -- --base origin/main` in the workspace being evaluated. Read `.cleanup-backups/local-checks/latest.json` there for the actual checked branch/commit/source fingerprint, per-check results and log paths. These are separate source snapshots; the workflow PR does not contain the newer application integration. No device QA, live provider request, meal write or production deployment was performed for this workflow change. Preserve these historical results without claiming they were rerun for the policy-only revision.
 
 ## Next actions
 
-1. Review and merge PR #3 once its local verification and review are complete; merging is still a separate action.
+1. Complete the user-authorized merge of PR #3 if still open. Read its live status before doing anything; do not run tests just because a merge is requested.
 2. Recover the current application/backend work through issue #4 into coherent, verified PRs.
 3. Create a GitHub Project with Backlog, Ready, Working, Waiting, In review and Done, plus priority/owner and linked PRs. This board remains to be set up.
 4. Take one ready issue per task branch; use the existing branch if work is unfinished. Keep broader food-analysis work in `priority.md` until selected.
