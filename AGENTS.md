@@ -1,5 +1,12 @@
 # Repository Guidelines
 
+## Development Workflow
+
+- Before implementing a task, read [CONTRIBUTING.md](CONTRIBUTING.md) for issue scope, branch setup, checks and PR completion criteria.
+- Use [priority.md](priority.md) for product ordering and linked GitHub Issues for execution status. For multi-session features, record a spec and split complete, verifiable slices before implementation.
+- Inspect the current branch and working tree before edits. Keep unrelated uncommitted work in place; use a separate branch/worktree when needed. Commit and stage only the task's files, then review against its fixed base and acceptance criteria.
+- Record validation evidence and remaining device/deployment work in the PR. Treat merges and production deployments as explicit release actions.
+
 ## Project Context
 
 Cal AI is an Expo Router + React Native app for:
