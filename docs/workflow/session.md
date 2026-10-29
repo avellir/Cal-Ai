@@ -2,7 +2,16 @@
 
 This file carries only the current handoff. GitHub Issues own task scope/status; `priority.md` owns food-analysis ordering. Check live Git status and the issue before relying on this note.
 
-## Active work
+## Latest publication: 30 October 2026
+
+- User explicitly requested pushing all changes to `main`, superseding the proposed PR recovery sequence for this publication.
+- Recovery issue: [#4](https://github.com/avellir/Cal-Ai/issues/4). Application/backend work and intended evaluation assets were committed as `2bf4794` on `feature/MOB-2-latest-2026-10-08`; remote workflow commit `1473252` was incorporated before publication.
+- Publication target: `origin/main`, direct push, no recovery PR. Check live Git state for the resulting merge commit and push status.
+- Tests, typecheck, lint and exports were not rerun, per requested testing schedule. The historical results below are the last recorded evidence, not validation of this merge.
+- Secrets, ignored evaluation output and `.cleanup-backups/` remain local. No deployment or live provider validation was performed.
+- Remaining: issue #4 review/verification and deployment parity checks remain open; device QA remains outstanding. Next action: verify the published source when requested, then resume product priorities from `priority.md`.
+
+## Previous handoff (historical)
 
 - Task: [workflow setup, issue #2](https://github.com/avellir/Cal-Ai/issues/2).
 - Branch: `chore/development-workflow`, in the separate worktree `C:/Temp/cal-ai-workflow-20261029`.
