@@ -1,51 +1,52 @@
 # Workflow rollout
 
-## First transition
+## Current decision
 
-- [x] Read the actual Git/GitHub state and research Matt Pocock's workflow.
-- [x] Preserve current tracked changes, untracked files and Git history in an ignored local checkpoint.
-- [x] Make `priority.md` the canonical food-analysis priority list.
-- [x] Prepare issue/PR templates, agent instructions and CI in a separate worktree.
-- [x] Run local checks in an isolated worktree and open [draft workflow PR #3](https://github.com/avellir/Cal-Ai/pull/3), linked to [setup issue #2](https://github.com/avellir/Cal-Ai/issues/2).
-- [ ] Complete a GitHub-hosted **Quality** run after the account billing lock is resolved.
-- [ ] Merge the workflow PR after checks and review.
-- [ ] Configure the `main` rule to require PRs and **Quality**, preventing force pushes/deletion. Keep mandatory external approvals at zero while working solo.
-- [ ] [Recover the existing FatSecret/vision/evaluation work](https://github.com/avellir/Cal-Ai/issues/4) into coherent reviewed PRs. Preserve the source branch and local checkpoint until the recovery is verified.
-- [ ] [Resolve existing full-app lint findings](https://github.com/avellir/Cal-Ai/issues/5), then make full lint blocking.
+Use local verification. GitHub Actions is deferred at the user's request, and its workflow file has been removed from [PR #3](https://github.com/avellir/Cal-Ai/pull/3). The earlier account billing lock does not block this process. Required hosted status checks are not part of the current setup.
 
-Inspection on 2026-10-29: GitHub `main` and `feature/MOB-2-latest-2026-10-08` both point to `357f98f`; two older feature branches also exist. No open issues, open PRs, `.github` directory on `main`, or repository rulesets were returned. Branches report `protected: false`. Avoid deleting old branches while checking whether their work is incorporated.
+## Transition checklist
 
-The local checkpoint is `.cleanup-backups/workflow-2026-10-29/`: `history.bundle`, `working-tree.patch`, a separate staged patch, original untracked files and a manifest. Ignored environment files, dependencies and evaluation caches stay in their existing locations. The checkpoint is local and excluded from Git. It protects the transition but is not an off-device backup.
+- [x] Research Matt Pocock's workflow and inspect the actual Git/GitHub state.
+- [x] Preserve existing tracked edits, untracked files and history in an ignored local checkpoint.
+- [x] Keep the food-analysis priorities in root `priority.md`.
+- [x] Add issue/PR templates and short contribution/agent instructions on a dedicated branch.
+- [x] Replace hosted CI with the executable `npm run verify -- --base origin/main`.
+- [x] Add a single [session handoff](session.md) and instructions for resuming it in a new Codex task.
+- [x] Record current app and isolated workflow-branch verification separately. See the current handoff and PR evidence.
+- [ ] Review and merge the locally verified workflow PR.
+- [ ] [Recover existing application/backend work, issue #4](https://github.com/avellir/Cal-Ai/issues/4), into coherent reviewed PRs.
+- [ ] Create the GitHub Project board and add existing issues: Backlog, Ready, Working, Waiting, In review and Done, with priority/owner and linked PRs.
+- [ ] Configure `main` to require PRs and prevent force pushes/deletion; mandatory external approvals remain zero while working solo. Local evidence is reviewed rather than enforced by a hosted check.
+- [ ] [Clear existing full-app lint findings, issue #5](https://github.com/avellir/Cal-Ai/issues/5), then make full lint a required local check.
 
-## Verification and current blocker
+## What the local command does
 
-The isolated workflow branch passed a clean dependency installation, TypeScript, 185 tests across 20 suites, changed-file lint, and an iOS JavaScript/assets export with dotenv disabled. The lint helper was also exercised with a path containing spaces, a syntax error that fails, and a documentation-only addition. Workflow and issue-form YAML parsed successfully. These checks validate the proposed workflow branch, which starts from GitHub main; the newer uncommitted application has its own larger test suite.
+It runs TypeScript, all Jest tests, changed-file ESLint, a separate full-app lint audit, and an iOS JavaScript/assets export. Each result is recorded even when another check fails. Required failures return a failing exit code. Full-lint debt is explicitly reported as `audit_failed`, not passed. The export disables dotenv and makes no live nutrition/vision requests or deployments.
 
-[GitHub Actions run 40917919687](https://github.com/avellir/Cal-Ai/actions/runs/40917919687) created both jobs but started no steps. Its Quality annotation says: "The job was not started because your account is locked due to a billing issue." This is an account-level runner blocker, not a passing remote check or an application-test failure. Resolve billing, rerun CI, and require Quality on main only after it has run successfully. The branch rules and merge remain pending.
+The ignored report `.cleanup-backups/local-checks/latest.json` identifies the checked branch, commit, base, uncommitted state and source fingerprint. It is invalid if source changes during the run. The PR should contain a short human-readable result summary, including any remaining audit errors and unperformed device/live checks.
 
-Full app/components lint was measured separately on the same base: 58 errors and 4 warnings. Its temporary audit status and cleanup are tracked in issue #5.
+## Existing work and backup
 
-## Initial GitHub backlog
+Initial inspection on 2026-10-29 found `main` and `feature/MOB-2-latest-2026-10-08` at `357f98f` with newer application changes in the working folder. The workflow branch starts from that GitHub base. It must not be mistaken for the latest working application.
 
-Create tasks with the supplied issue form. Keep this as the rollout checklist; once tasks are published, their issue state is authoritative.
+The original workspace remains on its original feature branch. Its checkpoint is `.cleanup-backups/workflow-2026-10-29/`, containing `history.bundle`, tracked/staged patches, original untracked files and a manifest. Ignored credentials, dependencies and evaluation caches remain in place. The local checkpoint is excluded from Git and is not an off-device backup. Keep it until recovery issue #4 is verified.
 
-| Order | Outcome | Acceptance |
-|---|---|---|
-| First | Recover current application/backend work | Inventory existing changes, preserve dependencies, scan staged files for credentials/generated artifacts, and land coherent PRs with relevant checks. Record deployed function versions separately. |
-| Next | Fix count/dish-aware portion warnings | Three eggs do not get a one-egg warning; soup is classified before its chicken ingredient; quantities remain unchanged. |
-| Next | Investigate missed visible ingredients | Establish omission/false-addition annotations, compare an improved single pass with at most one selective check, and retain only a measured improvement. |
-| Next | Improve recipe fit | Separate successful lookup from recipe suitability; retain explicit assumptions for soup, casserole, spreads and sauces. |
-| Next | Retry failed ingredients from results | Use saved context, preserve healthy matches and user edits, and make no vision call. |
-| Release gate | Remove existing lint debt | Full-app lint passes without broad rule suppression, then becomes blocking. |
+## Normal sessions after the transition
 
-The warning fix can land as a small independent task while product priorities remain in `priority.md`. New measured meals are needed for a true accuracy benchmark; the ten existing images remain regression examples.
+1. Open a fresh Codex task in the repository and say: "Continue Cal AI from the saved handoff."
+2. Codex reads `AGENTS.md`, the current handoff and linked issue; it resumes unfinished work or selects one ready issue.
+3. Codex uses one branch per task, implements a complete small outcome, runs local verification, and prepares commits/PR evidence.
+4. At a session boundary, Codex saves the next action and unfinished work in the handoff and updates the task/PR when authorized. A new chat resumes from these records.
+5. Review, merge and deployment are separate decisions. After merge, the next task starts from updated `main`.
 
-## Deliberate later additions
+This is a local check runner plus a documented agent routine, not an unattended agent service. Larger features get a parent spec and small complete tickets; a small fix can use one issue directly.
 
-GitHub Projects, additional reviewers, protected deployment environments, release tagging, and unattended agent loops can be introduced when needed. Begin with the issue/branch/PR/check/review loop and keep deployment explicit. Do not mistake a local configuration file or a suggested setting for a setting already active on GitHub.
+## Later
+
+Hosted CI, additional reviewers, protected deployment environments and unattended loops can be added when useful. The current ten food photos remain regression examples; independent weighed meals are still needed for an accuracy benchmark.
 
 ## References
 
-- [Repository contribution workflow](../../CONTRIBUTING.md)
-- [GitHub branch rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
-- [Required status checks](https://docs.github.com/en/pull-requests/reference/status-checks)
+- [Contribution workflow](../../CONTRIBUTING.md)
+- [Current handoff](session.md)
+- [Matt Pocock research and primary sources](matt-pocock-research.md)

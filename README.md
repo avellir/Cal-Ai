@@ -21,6 +21,7 @@ Photo analysis requires the authenticated `analyze-food` function. Follow [Azure
 - `npm test -- --runInBand`
 - `npm run lint`
 - `npm run typecheck`
+- `npm run verify -- --base origin/main` (local checks and a saved report; no GitHub Actions required)
 - `npm run check:env` (prints presence checks, never credential values)
 
 ## Daily tracking
