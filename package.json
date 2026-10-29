@@ -11,7 +11,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "check:env": "node scripts/check-environment.js",
-    "evaluate:food": "node scripts/evaluate-food.cjs"
+    "evaluate:food": "node scripts/evaluate-food.cjs",
+    "verify": "node scripts/verify-local.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/manrope": "^0.4.2",

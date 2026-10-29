@@ -1,0 +1,21 @@
+name: Bug report
+description: Reproduce a problem and define the expected behavior
+body:
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Include device/platform and relevant app version; redact credentials and personal data.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Screenshots, sanitized errors, or a failing behavior check.

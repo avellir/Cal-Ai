@@ -1,5 +1,15 @@
 # Repository Guidelines
 
+## Development Workflow
+
+- Before implementing a task, read [CONTRIBUTING.md](CONTRIBUTING.md) for issue scope, branch setup, checks and PR completion criteria.
+- At a fresh session or a request to continue the project, read [the current handoff](docs/workflow/session.md), then inspect Git status and the linked active issue. Resume its existing work before selecting another ready issue. A project board is not configured yet.
+- Use [priority.md](priority.md) for product ordering and linked GitHub Issues for execution status. For multi-session features, record a spec and split complete, verifiable slices before implementation.
+- Inspect the current branch and working tree before edits. Keep unrelated uncommitted work in place; use a separate branch/worktree when needed. Commit and stage only the task's files, then review against its fixed base and acceptance criteria.
+- Record validation evidence and remaining device/deployment work in the PR. Treat merges and production deployments as explicit release actions.
+- Run tests, typecheck, lint, builds and exports only when the user explicitly requests them or clearly says work is finished for the day. Routine questions, edits, commits, PR updates/merges and session handoffs do not trigger checks. Follow the testing schedule in [CONTRIBUTING.md](CONTRIBUTING.md); report when checks were not rerun under this policy.
+- At a session boundary, update the handoff with the active issue, branch/PR, last checked source state, untested changes, remaining work and next action. Commit and push coherent task work when authorized; preserve unfinished work without claiming it passed or finished.
+
 ## Project Context
 
 Cal AI is an Expo Router + React Native app for:
