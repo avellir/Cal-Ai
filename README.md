@@ -4,6 +4,10 @@ Expo Router / React Native app for photo-based meal estimates, calorie and macro
 
 This branch includes the local prototype cleanup, Expo SDK 57 upgrade, Azure analysis integration, production plans, and the first two daily-tracking changes.
 
+## Development workflow
+
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, checks and PR process. [priority.md](priority.md) keeps the food-analysis priorities; [the rollout checklist](docs/workflow/rollout.md) tracks the GitHub setup and recovery of existing work.
+
 ## Local development
 
 1. Run `npm ci`.
@@ -34,7 +38,7 @@ The shared editor and account-scoped in-memory scan drafts are implemented. A st
 
 For example, 600 calories per base portion at 2x becomes 1,200 calories in both review and the saved meal. Saving returns to the meal's chosen date. These changes use the existing `logged_at`, meal type, and quantity fields and require no new migration.
 
-## Current branch verification (October 1, 2026)
+## Historical verification (October 1, 2026)
 
 | Check | Result |
 | --- | --- |
