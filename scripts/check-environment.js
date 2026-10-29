@@ -1,3 +1,4 @@
+/* global __dirname */
 const fs = require('fs');
 const path = require('path');
 const { getEnvFiles, loadEnvFiles } = require('@expo/env');
@@ -15,7 +16,7 @@ function check(label, value) {
 check('Supabase URL', process.env.EXPO_PUBLIC_SUPABASE_URL ?? config.extra?.supabaseUrl);
 check('Supabase public key', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? config.extra?.supabaseAnonKey);
 console.log('INFO: Deploy analyze-food and configure Azure secrets in Supabase (not checked locally).');
-console.log('INFO: Nutrition lookup uses the built-in reference table; no FatSecret credentials are needed.');
+console.log('INFO: Deploy nutrition-lookup and configure FATSECRET_CONSUMER_KEY / FATSECRET_CONSUMER_SECRET in Supabase secrets (not checked locally).');
 const splash = config.plugins.find(plugin => Array.isArray(plugin) && plugin[0] === 'expo-splash-screen')[1];
 for (const asset of [config.icon, config.web.favicon, config.android.adaptiveIcon.foregroundImage, config.android.adaptiveIcon.monochromeImage, splash.image]) {
   const exists = fs.existsSync(path.resolve(root, asset));

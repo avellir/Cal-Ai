@@ -4,7 +4,7 @@ import { validateAdvancedAnalysis } from '@/services/advancedFoodValidation';
 import type { NutritionReference } from '@/lib/nutrition-types';
 
 const reference: NutritionReference = {
-  id: 'usda:fixture', name: 'Cooked food', source: 'usda', basisAmount: 100, basisUnit: 'g',
+  id: 'fatsecret:fixture', name: 'Cooked food', source: 'fatsecret', basisAmount: 100, basisUnit: 'g',
   nutrients: { calories: 149, protein: 9.99, carbs: 1.61, fat: 10.98 },
   servings: [{ name: '1 piece', grams: 50 }],
 };
@@ -40,5 +40,5 @@ it('aggregates only matched foods and becomes complete after the unknown is corr
   const partial = recalculateAnalysis(base, [known, unknown]);
   expect(partial.totalNutrition).toEqual(reference.nutrients);
   expect(partial.nutritionStatus).toBe('incomplete');
-  expect(recalculateAnalysis(base, [known, resolveIngredient(unknown, reference)]).nutritionStatus).toBe('complete');
+  expect(recalculateAnalysis(base, [known, resolveIngredient({ ...unknown, quantitySource: 'user' }, reference)]).nutritionStatus).toBe('complete');
 });

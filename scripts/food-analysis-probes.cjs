@@ -22,7 +22,7 @@ require.extensions['.ts'] = function (module, filename) {
 const { validatePortionSize } = require('../services/portionValidation.ts');
 const after = {
   generatedAt: new Date().toISOString(),
-  scope: 'Offline portion probes. Nutrition now requires authenticated USDA lookup; no generic numbers are generated offline.',
+  scope: 'Offline portion probes. Nutrition now requires authenticated FatSecret lookup; no generic numbers are generated offline.',
   lookup: baseline.lookup.map(({ name }) => ({
     name, source: 'unresolved', matchedFoodId: null, referencePer100g: null,
   })),
@@ -55,7 +55,7 @@ const lines = [
   ...after.lookup.flatMap((item, index) => item.matchedFoodId === baseline.lookup[index].matchedFoodId ? [] :
     ['| ' + item.name + ' | ' + baseline.lookup[index].matchedFoodId + ' | ' + item.matchedFoodId + ' |']),
   '',
-  'The generic fallback has been removed. Run live evaluation to obtain USDA matches, source IDs and known subtotals.',
+  'The generic fallback has been removed. Run live evaluation to obtain FatSecret matches, source IDs and known subtotals.',
   '',
   '## Additional regression coverage',
   '',
@@ -72,7 +72,7 @@ const lines = [
   '',
   'Live authenticated Azure analyses have not completed. No measured weights or recipes are available, so neither calorie error nor run-to-run vision consistency has been measured. The server prompt changes require redeploying analyze-food. Then use scripts/evaluate-food.cjs to save live results and cached responses; use --replay for a controlled client comparison.',
   '',
-  'See [implementation notes](../../scripts/FOOD_ANALYSIS_ACCURACY.md) for reference sources and validation details.',
+  'See [nutrition setup](../../supabase/NUTRITION_SETUP.md) for reference sources and validation details.',
   '',
 ];
 fs.writeFileSync(path.join(folder, 'algorithm-improvements.md'), lines.join('\n'));

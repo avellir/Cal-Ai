@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
+    "verify": "node scripts/verify-local.cjs",
     "check:env": "node scripts/check-environment.js",
+    "check:nutrition": "node scripts/check-nutrition-deployment.cjs",
     "evaluate:food": "node scripts/evaluate-food.cjs"
   },
   "dependencies": {

@@ -14,12 +14,13 @@ type Props = {
   regionAmount?: number;
   onRemove: () => void;
   onCancel: () => void;
+  isNew?: boolean;
 };
 
 const parse = (text: string) => Number(text.trim().replace(',', '.'));
 
-export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regionAmount }: Props) {
-  const [amount, setAmount] = useState(String(ingredient.quantity));
+export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regionAmount, isNew = false }: Props) {
+  const [amount, setAmount] = useState(isNew ? '' : String(ingredient.quantity));
   const [unit, setUnit] = useState(ingredient.unit);
   const [servingIndex, setServingIndex] = useState(ingredient.servingIndex);
   const [query, setQuery] = useState(ingredient.name);
@@ -76,6 +77,7 @@ export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regi
         reference || manual ? { ...ingredient, nutritionStatus: 'unresolved', nutrition: null, scaledNutrition: null, source: undefined, unresolvedReason: '' } : ingredient,
         quantity, unit, servingIndex,
       );
+      if (isNew) corrected.originalEstimate = undefined;
       let selected = reference;
       if (manual) {
         if (Object.values(manualValues).some(value => !value.trim())) throw new Error('Enter all four nutrition values, using 0 where appropriate.');
@@ -90,7 +92,9 @@ export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regi
           nutrients, servings: [],
         };
       }
-      onApply(selected ? resolveIngredient({ ...corrected, name: query.trim() || ingredient.name }, selected) : corrected, !!selected && isWholeDishReference(selected));
+      const named = { ...corrected, name: query.trim() || ingredient.name, foodName: query.trim() || ingredient.foodName,
+        ...(selected ? { nutritionIdentityKnown: true, identityUncertain: false, identityAlternatives: [] } : {}) };
+      onApply(selected ? resolveIngredient(named, selected) : named, !!selected && isWholeDishReference(selected));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Check this food and amount.');
     }
@@ -106,7 +110,8 @@ export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regi
       </View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
         <Text style={styles.name}>{ingredient.name}</Text>
-        <Text style={styles.hint}>Photo estimate: {ingredient.originalEstimate?.quantity ?? ingredient.quantity} {ingredient.originalEstimate?.unit ?? ingredient.unit}. Enter amounts for the base meal (1×).</Text>
+        <Text style={styles.hint}>{isNew ? 'Enter the amount and choose nutrition for the oil or dressing you consumed.' : `Photo estimate: ${ingredient.originalEstimate?.quantity ?? ingredient.quantity} ${ingredient.originalEstimate?.unit ?? ingredient.unit}. Enter amounts for the base meal (1×).`}</Text>
+        {ingredient.identityAlternatives?.length ? <Text style={styles.hint}>Possible identities: {ingredient.identityAlternatives.join(' or ')}. Confirm the food before choosing nutrition.</Text> : null}
         <Text style={styles.label}>Amount</Text>
         <TextInput accessibilityLabel="Ingredient amount" style={styles.input} keyboardType="decimal-pad" value={amount} onChangeText={setAmount} editable={!isBusy} />
         <View style={styles.choices}>
@@ -114,26 +119,26 @@ export function IngredientEditor({ ingredient, onApply, onRemove, onCancel, regi
           {(reference?.basisUnit === 'serving' || ingredient.unit === 'serving' || (manual && manualBasis === 'serving')) ?
             <Chip label="Serving" selected={unit === 'serving' && servingIndex === undefined} disabled={isBusy} onPress={() => { setUnit('serving'); setServingIndex(undefined); }} /> : null}
           {reference?.servings.map((serving, index) =>
-            <Chip key={index} label={serving.name + ' (' + serving.grams + ' g)'} selected={unit === 'serving' && servingIndex === index}
+            <Chip key={index} label={serving.name + ' (' + serving.grams + ' g' + (serving.volumeMl ? ' / ' + serving.volumeMl + ' ml' : '') + ')'} selected={unit === 'serving' && servingIndex === index}
               disabled={isBusy} onPress={() => { setUnit('serving'); setServingIndex(index); setAmount('1'); }} />)}
         </View>
         <Text style={styles.hint}>For a serving option, the amount is the number of that serving. Grams and milliliters are not interchangeable.</Text>
         <Text style={styles.label}>Food and preparation</Text>
         <TextInput accessibilityLabel="Search food and preparation" style={styles.input} value={query} onChangeText={setQuery} editable={!isBusy} onSubmitEditing={search} />
         <Pressable accessibilityRole="button" disabled={isBusy || !query.trim()} onPress={search} style={styles.action}>
-          <Text style={styles.actionText}>Search USDA foods</Text>
+          <Text style={styles.actionText}>Search FatSecret foods</Text>
         </Pressable>
         {message ? <Text style={styles.hint}>{message}</Text> : null}
         {candidates.map(candidate => (
           <Pressable key={candidate.id} accessibilityRole="button" disabled={isBusy} onPress={() => choose(candidate)} style={styles.candidate}>
             <Text>{candidate.name}</Text>
-            <Text style={styles.hint}>{Math.round(candidate.nutrients.calories)} calories / 100 g · USDA{candidate.recipeAverage ? ' · Recipe average' : ''}</Text>
+            <Text style={styles.hint}>{Math.round(candidate.nutrients.calories)} calories / {candidate.basisAmount} {candidate.basisUnit} · FatSecret{candidate.recipeAverage ? ' · Recipe average' : ''}</Text>
           </Pressable>
         ))}
         {reference && !manual ? <View style={styles.candidate}>
           <Text style={styles.label}>Selected: {reference.name}</Text>
           {isWholeDishReference(reference) ? <Text style={styles.hint}>This is a whole prepared dish. Applying it replaces the other ingredients detected in this same dish. Enter the weight of the whole dish, excluding separate sides.</Text> : null}
-          <Text style={styles.hint}>{reference.source === 'usda' ? 'USDA reference' : 'Entered by you'} · {reference.basisAmount} {reference.basisUnit}{reference.recipeAverage ? ' · Recipe average; your recipe may differ.' : ''}</Text>
+          <Text style={styles.hint}>{reference.source === 'fatsecret' ? 'FatSecret reference' : 'Entered by you'} · {reference.basisAmount} {reference.basisUnit}{reference.recipeAverage ? ' · Recipe average; your recipe may differ.' : ''}</Text>
           {reference.sourceUrl ? <Pressable accessibilityRole="link" onPress={() => Linking.openURL(reference.sourceUrl!)} style={styles.button}><Text style={styles.link}>View nutrition source</Text></Pressable> : null}
         </View> : null}
         <Pressable accessibilityRole="button" disabled={isBusy} onPress={() => setManual(!manual)} style={styles.button}>

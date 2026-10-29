@@ -1,8 +1,12 @@
 # Cal AI
 
-Expo Router / React Native app for photo-based meal estimates, calorie and macro logging, personal goals, and weight tracking. Uses Azure OpenAI through Supabase Edge Functions, a small built-in nutrition reference, Supabase, and Zustand.
+Expo Router / React Native app for photo-based meal estimates, calorie and macro logging, personal goals, and weight tracking. Uses Azure OpenAI and FatSecret through Supabase Edge Functions, Supabase, and Zustand.
 
 This branch includes the local prototype cleanup, Expo SDK 57 upgrade, Azure analysis integration, production plans, and the first two daily-tracking changes.
+
+## Development workflow
+
+Follow [CONTRIBUTING.md](CONTRIBUTING.md) for the issue, branch, checks and PR process. [priority.md](priority.md) keeps the food-analysis priorities; [the rollout checklist](docs/workflow/rollout.md) tracks the GitHub setup and recovery of existing work.
 
 ## Local development
 
@@ -10,14 +14,16 @@ This branch includes the local prototype cleanup, Expo SDK 57 upgrade, Azure ana
 2. Copy `.env.example` to `.env` and supply your development credentials.
 3. Run `npm start`, then select a device; `npm run android`, `npm run ios`, and `npm run web` are also available. Native iOS simulator development requires macOS.
 
-Photo analysis requires the authenticated `analyze-food` function. Follow [Azure setup](supabase/AZURE_SETUP.md). Azure credentials stay in Supabase secrets. Nutrition lookup currently uses a small built-in table; FatSecret is disabled. Unknown foods use generic estimates, so verify results before saving.
+Photo analysis requires the authenticated `analyze-food` function. Follow [Azure setup](supabase/AZURE_SETUP.md). Azure credentials stay in Supabase secrets. Nutrition lookup uses FatSecret through the authenticated nutrition-lookup function; follow [FatSecret setup](supabase/NUTRITION_SETUP.md). Its OAuth client ID and secret stay in Supabase secrets. Foods without a compatible nutrition reference remain unresolved.
 
 ## Checks
 
 - `npm test -- --runInBand`
 - `npm run lint`
 - `npm run typecheck`
+- `npm run verify -- --base origin/main` (local checks and a saved report; no GitHub Actions required)
 - `npm run check:env` (prints presence checks, never credential values)
+- `npm run check:nutrition` (authenticated live FatSecret deployment and food lookup check)
 
 ## Daily tracking
 
@@ -34,7 +40,7 @@ The shared editor and account-scoped in-memory scan drafts are implemented. A st
 
 For example, 600 calories per base portion at 2x becomes 1,200 calories in both review and the saved meal. Saving returns to the meal's chosen date. These changes use the existing `logged_at`, meal type, and quantity fields and require no new migration.
 
-## Current branch verification (October 1, 2026)
+## Historical verification (October 1, 2026)
 
 | Check | Result |
 | --- | --- |

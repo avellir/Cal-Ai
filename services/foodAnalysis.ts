@@ -8,6 +8,7 @@ import {
 } from '@/lib/advanced-food-analysis-types';
 
 import { hasCompleteNutrition } from './analysisNutrition';
+import { hasPendingAnalysisReview } from './analysisScope';
 import type { AddMealInput } from '@/lib/meal-log-types';
 
 export type SuccessfulAnalysisData = NonNullable<AdvancedAnalysisResult['data']>;
@@ -23,13 +24,13 @@ export function getMealInputFromAnalysis(
 
   return {
     name: getAnalysisDisplayName(data).trim() || 'Logged meal',
-    nutritionStatus: hasCompleteNutrition(data) ? 'complete' : 'incomplete',
+    nutritionStatus: hasCompleteNutrition(data) && !hasPendingAnalysisReview(data) ? 'complete' : 'incomplete',
     calories,
     macros: { protein, carbs, fat },
     quantity,
     servingSizeLabel,
     note: (quantity !== 1 ? `${servingSizeLabel} (${quantity}×)` : servingSizeLabel) +
-      (data.ingredients.some(ingredient => ingredient.nutrition?.reference?.matchQuality === 'approximate') ? ' · Estimated using compatible USDA recipe profiles' : ''),
+      (data.ingredients.some(ingredient => ingredient.nutrition?.reference?.matchQuality === 'approximate') ? ' · Estimated using compatible FatSecret recipe profiles' : ''),
     imageUri: imageUri || null,
     ...metadata,
   };
@@ -88,6 +89,7 @@ export function isSuccessfulAnalysisData(value: unknown): value is SuccessfulAna
       (ingredient.wasAdjusted === undefined || typeof ingredient.wasAdjusted === 'boolean') &&
       (ingredient.adjustmentReason === undefined || typeof ingredient.adjustmentReason === 'string')
     ) &&
+    (data.excludedIngredients === undefined || Array.isArray(data.excludedIngredients) && data.excludedIngredients.every(isAnalysisIngredient)) &&
     Array.isArray(data.regions) &&
     data.regions.every(isFoodRegion) &&
     typeof data.confidence === 'number' &&
@@ -102,6 +104,7 @@ export function getAnalysisDisplayName(data: SuccessfulAnalysisData): string {
   const uniqueDishNames = Array.from(
     new Set(
       data.regions
+        .filter(region => region.selected !== false)
         .map(region => region.dishName?.trim())
         .filter((dishName): dishName is string => Boolean(dishName))
     )
@@ -116,6 +119,7 @@ export function getAnalysisDisplayName(data: SuccessfulAnalysisData): string {
   }
 
   const regionDescriptions = data.regions
+    .filter(region => region.selected !== false)
     .map(region => region.description.trim())
     .filter(Boolean);
 
@@ -147,6 +151,12 @@ export function getAnalysisServingSizeLabel(data: SuccessfulAnalysisData): strin
     return `${Math.round(totalQuantity)}${uniqueUnits[0]}`;
   }
 
+  if (data.ingredients.length > 0 && data.ingredients.every(item => item.unit === 'g' || item.unit === 'ml')) {
+    return ['g', 'ml'].map(unit => {
+      const amount = data.ingredients.filter(item => item.unit === unit).reduce((sum, item) => sum + item.quantity, 0);
+      return amount > 0 ? `${Math.round(amount)}${unit}` : '';
+    }).filter(Boolean).join(' + ');
+  }
   return '1 serving';
 }
 

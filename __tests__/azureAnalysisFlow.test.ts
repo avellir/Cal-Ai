@@ -10,13 +10,13 @@ it('returns the canonical nutrition shape and preserves fallback source and warn
     ingredients: [{ name: 'chicken', weight_grams: 140, confidence: 90 }, { name: 'rice', weight_grams: 150, confidence: 90 }],
   }], overallConfidence: 90, notes: 'Cooking oil cannot be measured from this photo.' }));
   (lookupFoodNutrition as jest.Mock).mockImplementation(async queries => queries.map((query: string) => ({
-    query, candidates: [], match: { id: 'usda:fixture', name: query, source: 'usda', basisAmount: 100, basisUnit: 'g',
+    query, candidates: [], match: { id: 'fatsecret:fixture', name: query, source: 'fatsecret', basisAmount: 100, basisUnit: 'g',
       nutrients: { calories: 100, protein: 10, carbs: 10, fat: 2 }, servings: [] },
   })));
   const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
   expect(result.success).toBe(true);
   expect(result.data?.ingredients).toHaveLength(2);
-  expect(result.data?.ingredients[0]).toEqual(expect.objectContaining({ unit: 'g', source: 'usda' }));
+  expect(result.data?.ingredients[0]).toEqual(expect.objectContaining({ unit: 'g', source: 'fatsecret' }));
   expect(result.data?.totalNutrition.calories).toBe(290);
   expect(result.data?.warnings).toContain('Cooking oil cannot be measured from this photo.');
 });

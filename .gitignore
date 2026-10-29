@@ -47,3 +47,9 @@ app-example
 # Local food evaluation outputs and reference annotations
 photo-food/evaluation/
 photo-food/reference.json
+food_images/evaluation/
+food_images/reference.json
+supabase/.temp/
+
+# Downloaded nutrition source archives and raw imports
+/data/nutrition/imports/

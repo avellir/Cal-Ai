@@ -12,6 +12,10 @@ export function scaleNutrition(reference: NutritionReference, quantity: number, 
     amount = quantity;
   } else if (reference.basisUnit === 'g' && MASS_TO_GRAMS[unit]) {
     amount = quantity * MASS_TO_GRAMS[unit];
+  } else if (reference.basisUnit === 'g' && unit === 'ml') {
+    const serving = reference.servings.find(item => Number.isFinite(item.volumeMl) && item.volumeMl! > 0 && Number.isFinite(item.grams) && item.grams > 0);
+    if (!serving) throw new Error('Volume requires a documented volume-to-weight serving. Choose a volume reference, enter grams, or copy nutrition per 100 ml from a label.');
+    amount = quantity * serving.grams / serving.volumeMl!;
   } else if (reference.basisUnit === 'g' && unit === 'serving' && servingIndex !== undefined) {
     const serving = reference.servings[servingIndex];
     if (!serving || !Number.isFinite(serving.grams) || serving.grams <= 0) throw new Error('Choose a serving with a known weight.');

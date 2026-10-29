@@ -1,4 +1,4 @@
-import { handleRequest, invalidResultFields, validResult } from '../supabase/functions/analyze-food/index';
+import { ANALYSIS_VERSION, handleRequest, invalidResultFields, validResult } from '../supabase/functions/analyze-food/index';
 
 const settings: Record<string, string> = {
   SUPABASE_URL: 'https://test.supabase.co', SUPABASE_ANON_KEY: 'anon',
@@ -38,7 +38,7 @@ it('uses server deployment, strict schema, no storage, and never returns the key
   const { fetcher, deps } = setup();
   const res = await handleRequest(request({ mode: 'analyze', base64Image: jpeg, prompt: 'override', model: 'expensive-model' }), deps);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ result: noFood });
+  expect(await res.json()).toEqual({ result: noFood, metadata: { analysisVersion: ANALYSIS_VERSION, modelDeployment: 'gpt-5-mini' } });
   const [url, options] = fetcher.mock.calls[1];
   expect(url).toBe(`${settings.AZURE_OPENAI_BASE_URL}/responses`);
   const body = JSON.parse(options.body);
@@ -52,7 +52,7 @@ it.each(['refine', 'label'])('supports %s with a server schema', async mode => {
   };
   const { deps } = setup(result);
   const res = await handleRequest(request({ mode, base64Image: jpeg, dishLabel: 'pizza' }), deps);
-  expect(res.status).toBe(200); expect(await res.json()).toEqual({ result });
+  expect(res.status).toBe(200); expect(await res.json()).toEqual({ result, metadata: { analysisVersion: ANALYSIS_VERSION, modelDeployment: 'gpt-5-mini' } });
 });
 it.each([
   { mode: 'arbitrary', base64Image: jpeg },
@@ -123,4 +123,68 @@ it('rejects reversed boxes and invalid total weights', () => {
   expect(validResult(reversed, 'analyze')).toBe(false);
   expect(invalidResultFields(reversed, 'analyze')).toContain('regions[0].boundingBox.width');
   expect(validResult({ ...noFood, total_plate_weight_grams: -10 }, 'analyze')).toBe(false);
+});
+
+it('returns authenticated version/model provenance without sending a photo to Azure', async () => {
+  const { deps, fetcher } = setup();
+  const response = await handleRequest(request({ mode: 'metadata' }), deps);
+  expect(await response.json()).toEqual({ metadata: { analysisVersion: ANALYSIS_VERSION, modelDeployment: 'gpt-5-mini' } });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it.each([{ visible_count: 0 }, { visible_count: 1.5 }, { visible_fraction: 2 }, { identity_uncertain: 'no' }])('rejects invalid structured count evidence %j', extra => {
+  expect(validResult({ ingredients: [{ name: 'egg', weight_grams: 25, confidence: 90, ...extra }] }, 'refine')).toBe(false);
+});
+
+it('retains optional regions only for clients that support scope selection', async () => {
+  const region = (scope: string) => ({ scope, description: 'Food', dishName: 'Food', confidence: 90,
+    boundingBox: { xmin: 0, ymin: 0, xmax: 100, ymax: 100 }, ingredients: [{ name: 'egg', weight_grams: 50, confidence: 90 }] });
+  const result = { ...noFood, regions: [region('main'), region('accompaniment'), region('background')] };
+  const legacy = await handleRequest(request(), setup(result).deps);
+  expect((await legacy.json()).result.regions).toHaveLength(1);
+  const current = await handleRequest(request({ mode: 'analyze', base64Image: jpeg, scopeVersion: ANALYSIS_VERSION }), setup(result).deps);
+  expect((await current.json()).result.regions).toHaveLength(3);
+});
+
+it('requests the amount/unit contract only for clients that support it', async () => {
+  const { deps, fetcher } = setup();
+  await handleRequest(request({ mode: 'analyze', base64Image: jpeg, measurementVersion: 'identity-volume-v2' }), deps);
+  const body = JSON.parse(fetcher.mock.calls[1][1].body);
+  const properties = body.text.format.schema.properties.regions.items.properties.ingredients.items.properties;
+  expect(properties.unit.enum).toEqual(['g', 'ml']);
+  expect(properties.amount).toBeDefined();
+  expect(properties.weight_grams).toBeUndefined();
+  const legacy = setup();
+  await handleRequest(request(), legacy.deps);
+  const previous = JSON.parse(legacy.fetcher.mock.calls[1][1].body);
+  expect(previous.text.format.schema.properties.regions.items.properties.ingredients.items.properties.weight_grams).toBeDefined();
+});
+
+it('validates volume amounts and rejects conflicting mass fields or reversed ranges', () => {
+  const ingredient = { name: 'Cocktail', amount: 220, unit: 'ml', amount_min: 180, amount_max: 260, confidence: 90 };
+  expect(validResult({ ingredients: [ingredient] }, 'refine')).toBe(true);
+  expect(validResult({ ingredients: [{ ...ingredient, amount_min: 0 }] }, 'refine')).toBe(true);
+  for (const extra of [{ weight_grams: 220 }, { unit: 'cup' }, { amount_min: 300 }, { amount: -1 }]) {
+    expect(validResult({ ingredients: [{ ...ingredient, ...extra }] }, 'refine')).toBe(false);
+  }
+});
+
+it('uses the restored gram contract for plated food with bounded coordinate choices', async () => {
+  const { deps, fetcher } = setup();
+  await handleRequest(request({ mode: 'analyze', base64Image: jpeg, measurementVersion: ANALYSIS_VERSION }), deps);
+  const body = JSON.parse(fetcher.mock.calls[1][1].body);
+  const region = body.text.format.schema.properties.regions.items.properties;
+  expect(region.ingredients.items.properties.weight_grams).toBeDefined();
+  expect(region.ingredients.items.properties.amount).toBeUndefined();
+  expect(region.ingredients.items.properties.nutrition_identity_known).toBeUndefined();
+  expect(region.boundingBox.properties.xmax.enum).toContain(1000);
+  expect(region.boundingBox.properties.xmax.enum).not.toContain(1010);
+  expect(body.input[0].content[0].text).toContain('PORTION GUIDE');
+});
+
+it('supports a separate vision deployment while keeping the legacy fallback', async () => {
+  const { deps } = setup();
+  const response = await handleRequest(request({ mode: 'metadata' }), { ...deps,
+    env: name => name === 'AZURE_OPENAI_VISION_DEPLOYMENT' ? 'vision-candidate' : settings[name] });
+  expect((await response.json()).metadata.modelDeployment).toBe('vision-candidate');
 });

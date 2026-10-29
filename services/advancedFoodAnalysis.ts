@@ -4,7 +4,7 @@
  * Coordinates the optimized food analysis pipeline:
  * 1. Combined Segmentation + Decomposition (Single Azure API call)
  * 2. Edge Case Detection (no-food, packaged labels, beverages, etc.)
- * 3. Automatic USDA record selection using food and preparation context
+ * 3. Automatic FatSecret record selection using food and preparation context
  * 4. Validation and Aggregation
  * 
  * One recognition call per image, plus optional topping refinement or label reading.
@@ -34,6 +34,8 @@ import { runPhotoAnalysis, convertImageToBase64 } from './photoAnalysis';
 import { deduplicateIngredients } from './ingredientDeduplication';
 import { validatePortionSize } from './portionValidation';
 import { containsFoodPhrase, isBeverageName, normalizeFoodName } from './foodNames';
+import { initializeAnalysisScope } from './analysisScope';
+import { ingredientFromVision, type VisionIngredient } from './photoMeasurements';
 
 // ============================================================================
 // Main Orchestrator
@@ -42,17 +44,6 @@ import { containsFoodPhrase, isBeverageName, normalizeFoodName } from './foodNam
 /**
  * Ingredient as returned by the new prompt (uses weight_grams directly)
  */
-type VisionIngredient = {
-    name: string;
-    weight_grams: number;
-    confidence: number;
-    visual_evidence?: string;
-    food_name?: string;
-    preparation?: string;
-    representation?: 'whole_dish' | 'component';
-    weight_min_grams?: number;
-    weight_max_grams?: number;
-};
 
 /**
  * Combined analysis result type (internal use)
@@ -62,6 +53,10 @@ type CombinedAnalysisResult = {
     regions: (FoodRegion & {
         dishName?: string;
         ingredients: VisionIngredient[];
+        scope?: FoodRegion['scope'];
+        serving_confirmation_required?: boolean;
+        fat_assessment?: FoodRegion['fatAssessment'];
+        fat_evidence?: string;
     })[];
     overallConfidence: number;
     total_plate_weight_grams?: number;
@@ -117,10 +112,6 @@ function isGenericLayeredName(name: string): boolean {
     return LAYERED_DISH_KEYWORDS.some(keyword => lower === keyword);
 }
 
-function clamp(value: number, min: number, max: number): number {
-    return Math.min(max, Math.max(min, value));
-}
-
 function normalizeBoundingBox(
     boundingBox: Record<string, unknown> | undefined
 ): FoodRegion['boundingBox'] | undefined {
@@ -159,31 +150,6 @@ function normalizeBoundingBox(
     return undefined;
 }
 
-function normalizeBeverageQuantityMl(quantityMl: number): {
-    adjustedQuantity: number;
-    wasAdjusted: boolean;
-    confidencePenalty: number;
-    reason: string;
-} {
-    if (!Number.isFinite(quantityMl) || quantityMl <= 0) {
-        throw new Error('Beverage quantity must be positive and finite.');
-    }
-
-    // Preserve the visible volume; only enforce the supported schema ceiling.
-    const adjustedQuantity = Math.min(quantityMl, 10000);
-
-    const wasAdjusted = adjustedQuantity !== quantityMl;
-    if (!wasAdjusted) {
-        return { adjustedQuantity, wasAdjusted: false, confidencePenalty: 0, reason: '' };
-    }
-
-    const diffRatio = Math.abs(adjustedQuantity - quantityMl) / Math.max(1, quantityMl);
-    const confidencePenalty = clamp(Math.round(diffRatio * 20), 3, 15);
-    const reason = `Beverage volume normalized from ${quantityMl.toFixed(0)}ml to ${adjustedQuantity.toFixed(0)}ml for stability.`;
-
-    return { adjustedQuantity, wasAdjusted: true, confidencePenalty, reason };
-}
-
 export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: string): Promise<AdvancedAnalysisResult> {
     const startTime = Date.now();
     const stagesCompleted: string[] = [];
@@ -209,6 +175,10 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 description: r.description,
                 dishName: r.dishName,
                 confidence: r.confidence,
+                scope: r.scope,
+                servingConfirmationRequired: r.serving_confirmation_required,
+                fatAssessment: r.fat_assessment,
+                fatEvidence: r.fat_evidence,
                 boundingBox: normalizeBoundingBox(r.boundingBox as Record<string, unknown> | undefined)
             })),
             overallConfidence: combinedResult.overallConfidence,
@@ -271,11 +241,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         const rawIngredients = combinedResult.regions.flatMap((r, regionIndex) =>
             (r.ingredients || []).map(ingredient => ({ ...ingredient, regionIndex }))
         );
-        if (rawIngredients.some(ingredient => !ingredient.name?.trim() ||
-            !Number.isFinite(ingredient.weight_grams) || ingredient.weight_grams <= 0 ||
-            !Number.isFinite(ingredient.confidence) || ingredient.confidence < 0 || ingredient.confidence > 100)) {
-            throw new Error('Food analysis returned invalid ingredients. Please try another photo.');
-        }
+        rawIngredients.forEach(ingredient => ingredientFromVision(ingredient, ingredient.regionIndex));
         
         // 3.1 Filter out low-confidence ingredients (confidence < 40 per new prompt rules)
         const MIN_INGREDIENT_CONFIDENCE = 40;
@@ -310,6 +276,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             const isHiddenIngredientType = HIDDEN_INGREDIENT_PATTERNS.some(pattern => 
                 nameLower === pattern
             );
+            if (ing.is_added_fat && ing.visual_evidence?.trim()) return true;
             
             if (isHiddenIngredientType && ing.confidence < HIDDEN_INGREDIENT_CONFIDENCE_THRESHOLD) {
                 console.log(
@@ -329,21 +296,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         }
 
         // 3.3 Convert to canonical Ingredient shape for downstream processing
-        let ingredientsForProcessing: Ingredient[] = filteredIngredients.map(ing => ({
-            name: ing.name,
-            quantity: ing.weight_grams,
-            unit: 'g',
-            confidence: ing.confidence,
-            regionIndex: ing.regionIndex,
-            quantitySource: 'photo',
-            originalEstimate: { quantity: ing.weight_grams, unit: 'g' },
-            foodName: ing.food_name,
-            preparation: ing.preparation,
-            visualEvidence: ing.visual_evidence,
-            estimatedWeightRange: typeof ing.weight_min_grams === 'number' && typeof ing.weight_max_grams === 'number' &&
-                ing.weight_min_grams > 0 && ing.weight_min_grams <= ing.weight_grams && ing.weight_max_grams >= ing.weight_grams
-                ? { min: ing.weight_min_grams, max: ing.weight_max_grams } : undefined,
-        }));
+        let ingredientsForProcessing: Ingredient[] = filteredIngredients.map(ing => ingredientFromVision(ing, ing.regionIndex));
 
         // Keep the structured ingredient names and weights; region captions are
         // not a reason to replace a food or collapse several visible ingredients.
@@ -357,23 +310,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
             try {
                 // Handle beverages separately: weights from vision models are often jittery and
                 // the generic portion constraints are tuned for solids.
-                if (isBeverageIngredient(ing.name)) {
-                    const normalization = normalizeBeverageQuantityMl(ing.quantity);
-                    if (normalization.wasAdjusted) {
-                        console.log(
-                            `🥤 Beverage normalized: "${ing.name}" ${ing.quantity.toFixed(0)}ml → ${normalization.adjustedQuantity.toFixed(0)}ml ` +
-                            `(-${normalization.confidencePenalty}% confidence)`
-                        );
-                    }
-                    return {
-                        ...ing,
-                        unit: 'g',
-                        quantity: normalization.adjustedQuantity,
-                        confidence: Math.max(0, ing.confidence - normalization.confidencePenalty),
-                        wasAdjusted: normalization.wasAdjusted ? true : ing.wasAdjusted,
-                        adjustmentReason: normalization.wasAdjusted ? normalization.reason : ing.adjustmentReason,
-                    };
-                }
+                if (ing.unit === 'ml' || isBeverageIngredient(ing.name)) return ing;
 
                 const validation = validatePortionSize(ing.name, ing.quantity, 'g');
                 if (validation.warning) warnings.push(validation.warning);
@@ -402,7 +339,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         // 3.6 Merge repeated labels within regions and add separate portions.
         stagesCompleted.push('dedupe');
         const dedupe = deduplicateIngredients(ingredientsForProcessing, true);
-        ingredientsForProcessing = dedupe.uniqueIngredients.map(ingredient => ({ ...ingredient, originalEstimate: { quantity: ingredient.quantity, unit: ingredient.unit } }));
+        ingredientsForProcessing = dedupe.uniqueIngredients;
         if (dedupe.mergedCount > 0) {
             warnings.push(`Merged ${dedupe.mergedCount} duplicate ingredient(s) for consistency.`);
         }
@@ -415,18 +352,21 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         }
 
         // 3.8 Normalize beverage units (e.g., milk/coffee) to volume where applicable
-        // Vision returns grams. Keep mass units until the user chooses a supported volume basis.
+        // Keep the supplied unit. Nutrition scaling requires an explicit compatible basis.
 
         // 4. Nutritional Lookup
         stagesCompleted.push('lookup');
 
         let lookups: Awaited<ReturnType<typeof lookupFoodNutrition>> = [];
         try {
-            lookups = await lookupFoodNutrition(ingredientsForProcessing.map(ingredient => ingredient.name), ingredientsForProcessing.map(ingredient => ({
+            lookups = await lookupFoodNutrition(ingredientsForProcessing.map(ingredient => ingredient.foodName ?? ingredient.name), ingredientsForProcessing.map(ingredient => ({
                 foodName: ingredient.foodName ?? ingredient.name,
                 preparation: ingredient.preparation ?? 'unknown',
                 dishName: segmentationData.regions[ingredient.regionIndex ?? 0]?.dishName ?? '',
                 visualEvidence: ingredient.visualEvidence?.slice(0, 200) ?? '',
+                unit: ingredient.unit as 'g' | 'ml', representation: ingredient.representation,
+                identityUncertain: ingredient.identityUncertain, nutritionIdentityKnown: ingredient.nutritionIdentityKnown,
+                identityAlternatives: ingredient.identityAlternatives,
             })));
         } catch (error) {
             warnings.push(error instanceof Error ? error.message : 'Nutrition lookup is unavailable.');
@@ -437,7 +377,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 return unresolvedIngredient(ingredient, lookup?.reason ?? 'Search for this food or enter nutrition manually.');
             }
             try {
-                return resolveIngredient(ingredient, lookup.match);
+                return resolveIngredient(ingredient, lookup.match, segmentationData.regions[ingredient.regionIndex ?? 0]?.dishName);
             } catch (error) {
                 return unresolvedIngredient(ingredient, error instanceof Error ? error.message : 'Confirm the portion unit.');
             }
@@ -475,7 +415,7 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
         };
 
         // Run Final Validation
-        const validatedResult = validateAdvancedAnalysis({ ...initialResult, data: recalculateAnalysis(initialResult.data!, validIngredients) });
+        const validatedResult = validateAdvancedAnalysis({ ...initialResult, data: initializeAnalysisScope(recalculateAnalysis(initialResult.data!, validIngredients)) });
 
         return validatedResult;
 
@@ -504,7 +444,7 @@ async function refineLayeredDishIngredients(
     base64Image: string,
     dishLabel: string
 ): Promise<VisionIngredient[]> {
-    const response = await runPhotoAnalysis({ mode: 'refine', base64Image, dishLabel });
+    const response = await runPhotoAnalysis({ mode: 'refine', base64Image, dishLabel, scopeVersion: 'counts-scope-v1', measurementVersion: 'stable-food-v3' });
 
     try {
         const parsed = JSON.parse(response) as { ingredients?: VisionIngredient[] };
@@ -523,7 +463,7 @@ async function refineLayeredDishIngredients(
  * This reduces API usage by 50-75% compared to separate calls
  */
 async function performCombinedAnalysis(base64Image: string): Promise<CombinedAnalysisResult> {
-    const response = await runPhotoAnalysis({ mode: 'analyze', base64Image });
+    const response = await runPhotoAnalysis({ mode: 'analyze', base64Image, scopeVersion: 'counts-scope-v1', measurementVersion: 'stable-food-v3' });
     const parsed = JSON.parse(response) as CombinedAnalysisResult;
     if (!parsed || !Array.isArray(parsed.regions) ||
         !Number.isFinite(parsed.overallConfidence) || parsed.overallConfidence < 0 || parsed.overallConfidence > 100 ||

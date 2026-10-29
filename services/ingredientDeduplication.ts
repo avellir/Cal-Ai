@@ -25,6 +25,7 @@ export function deduplicateIngredients(ingredients: Ingredient[], preserveRegion
   for (const ingredient of ingredients) {
     const group = groups.find(items => (!preserveRegions || items[0].regionIndex === ingredient.regionIndex) && areIngredientsSimilar(items[0].name, ingredient.name).isSimilar &&
       items[0].preparation === ingredient.preparation &&
+      items[0].representation === ingredient.representation && items[0].itemType === ingredient.itemType &&
       convertToSameUnit(ingredient.quantity, ingredient.unit, items[0].unit) !== null);
     if (group) {
       group.push(ingredient);
@@ -34,7 +35,9 @@ export function deduplicateIngredients(ingredients: Ingredient[], preserveRegion
     }
   }
   const uniqueIngredients = groups.map(items => {
-    const current = items[0];
+    // Preserve the count, range and provenance belonging to the retained total.
+    const current = items.reduce((largest, item) =>
+      convertToSameUnit(item.quantity, item.unit, largest.unit)! > largest.quantity ? item : largest);
     const regionQuantities = new Map<number, number>();
     let unscopedQuantity = 0;
     for (const item of items) {
@@ -50,7 +53,12 @@ export function deduplicateIngredients(ingredients: Ingredient[], preserveRegion
     const reasons = [...new Set(items.flatMap(item => item.wasAdjusted && item.adjustmentReason ? [item.adjustmentReason] : []))].sort();
     return {
       ...current,
-      estimatedWeightRange: items.length === 1 ? current.estimatedWeightRange : undefined,
+      estimatedWeightRange: items.every(item => item.regionIndex === current.regionIndex) ? current.estimatedWeightRange : undefined,
+      estimatedAmountRange: items.every(item => item.regionIndex === current.regionIndex) ? current.estimatedAmountRange : undefined,
+      photoAmountRange: items.every(item => item.regionIndex === current.regionIndex) ? current.photoAmountRange : undefined,
+      visibleCount: items.every(item => item.regionIndex === current.regionIndex) ? current.visibleCount : undefined,
+      visibleFraction: items.every(item => item.regionIndex === current.regionIndex) ? current.visibleFraction : undefined,
+      identityUncertain: items.some(item => item.identityUncertain) || undefined,
       name: items.map(item => item.name).sort((a, b) => b.length - a.length || a.localeCompare(b))[0],
       quantity: unscopedQuantity + [...regionQuantities.values()].reduce((sum, value) => sum + value, 0),
       confidence: Math.min(...items.map(item => item.confidence)),

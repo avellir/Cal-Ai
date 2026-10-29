@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { MealEditor } from '@/components/meal-log/MealEditor';
 import { IngredientEditor } from '@/components/meal-log/IngredientEditor';
+import { MealScopeReview } from '@/components/meal-log/MealScopeReview';
+import { addAnalysisFat, confirmAnalysisFat, confirmAnalysisRegion, hasPendingAnalysisReview, selectAnalysisRegion } from '@/services/analysisScope';
 import { hasCompleteNutrition, recalculateAnalysis, replaceAnalysisIngredient } from '@/services/analysisNutrition';
 import type { AnalysisIngredient } from '@/lib/advanced-food-analysis-types';
 import { DesignColors } from '@/constants/theme';
@@ -99,6 +101,7 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
   const [mealInput, setMealInput] = useState(initialInput);
   const [analysisData, setAnalysisData] = useState(initialAnalysisData);
   const [editingIngredient, setEditingIngredient] = useState<number | null>(null);
+  const [addingFatRegion, setAddingFatRegion] = useState<number | null>(null);
   const [manualOverride, setManualOverride] = useState(initialInput.nutritionStatus === 'complete' && !hasCompleteNutrition(initialAnalysisData));
   const [isEditing, setIsEditing] = useState(false);
   const [showIngredients, setShowIngredients] = useState(false);
@@ -125,10 +128,10 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
   };
 
   const nutritionComplete = hasCompleteNutrition(analysisData) || manualOverride;
-  const saveAllowed = manualOverride || (nutritionComplete && analysisData.ingredients.length > 0);
-  const updateIngredients = (nextIngredients: AnalysisIngredient[]) => {
+  const reviewPending = hasPendingAnalysisReview(analysisData);
+  const saveAllowed = !reviewPending && (manualOverride || (nutritionComplete && analysisData.ingredients.length > 0));
+  const updateAnalysis = (next: SuccessfulAnalysisData) => {
     if (!session?.user.id || isSaving || isRetrying) return;
-    const next = recalculateAnalysis(analysisData, nextIngredients);
     if (draftId && !useMealDraftStore.getState().updateAnalysis(session.user.id, draftId, { success: true, data: next })) {
       Alert.alert('Session expired', 'Please sign in again.');
       return;
@@ -140,7 +143,9 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
     setMealInput({ ...base, name: mealInput.name });
     setManualOverride(false);
     setEditingIngredient(null);
+    setAddingFatRegion(null);
   };
+  const updateIngredients = (nextIngredients: AnalysisIngredient[]) => updateAnalysis(recalculateAnalysis(analysisData, nextIngredients));
 
   const foodName = mealInput.name.trim() || getAnalysisDisplayName(analysisData).trim() || 'Your meal';
   const displayName = foodName.charAt(0).toUpperCase() + foodName.slice(1);
@@ -253,6 +258,11 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
         </View>
 
         {!nutritionComplete ? <Text style={styles.detailText}>We couldn’t finish this estimate. The numbers include only matched foods. Retry the analysis or take a clearer photo.</Text> : null}
+        <MealScopeReview data={analysisData} disabled={isSaving || isRetrying}
+          onSelect={(index, selected) => updateAnalysis(selectAnalysisRegion(analysisData, index, selected))}
+          onConfirm={index => updateAnalysis(confirmAnalysisRegion(analysisData, index))}
+          onConfirmFat={index => updateAnalysis(confirmAnalysisFat(analysisData, index))}
+          onAddFat={index => setAddingFatRegion(index)} />
         <View style={styles.portionCard}>
           <View style={styles.sectionHeadingRow}>
             <Text style={styles.sectionTitle}>Portion</Text>
@@ -412,18 +422,18 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityState={{ disabled: isSaving || isRetrying || (!saveAllowed && !imageUri) }}
+          accessibilityState={{ disabled: isSaving || isRetrying || reviewPending || (!saveAllowed && !imageUri) }}
           onPress={saveAllowed ? handleSave : retryEstimate}
-          disabled={isSaving || isRetrying || (!saveAllowed && !imageUri)}
+          disabled={isSaving || isRetrying || reviewPending || (!saveAllowed && !imageUri)}
           style={({ pressed }) => [
             styles.saveButton,
-            (isSaving || isRetrying || (!saveAllowed && !imageUri)) && styles.saveButtonDisabled,
+            (isSaving || isRetrying || reviewPending || (!saveAllowed && !imageUri)) && styles.saveButtonDisabled,
             pressed && !isSaving && styles.pressed,
           ]}>
           {isSaving || isRetrying ? (
             <ActivityIndicator size="small" color={DesignColors.white} />
           ) : (
-            <Text style={styles.saveText}>{saveAllowed ? 'Save meal' : 'Retry estimate'}</Text>
+            <Text style={styles.saveText}>{reviewPending ? 'Confirm foods and portion above' : saveAllowed ? 'Save meal' : 'Retry estimate'}</Text>
           )}
         </Pressable>
       </View>
@@ -442,6 +452,17 @@ function MealReview({ analysisData: initialAnalysisData, initialInput, draftId }
         <Modal visible animationType="slide" onRequestClose={() => setIsEditing(false)}>
           <SafeAreaView style={styles.editorContainer} edges={['top', 'bottom', 'left', 'right']}>
             <MealEditor initialInput={mealInput} requireNutritionEntry={!nutritionComplete} onSubmit={input => updateInput({ ...input, nutritionStatus: 'complete' })} onCancel={() => setIsEditing(false)} />
+          </SafeAreaView>
+        </Modal>
+      ) : null}
+      {addingFatRegion !== null ? (
+        <Modal visible animationType="slide" onRequestClose={() => setAddingFatRegion(null)}>
+          <SafeAreaView style={styles.editorContainer} edges={['top', 'bottom', 'left', 'right']}>
+            <IngredientEditor isNew ingredient={{ name: 'Oil or dressing', quantity: 1, unit: 'g', confidence: 100,
+              quantitySource: 'user', representation: 'component', extraWithWholeDish: true, isAddedFat: true,
+              nutritionStatus: 'unresolved', nutrition: null, scaledNutrition: null, unresolvedReason: 'Enter the food, amount and nutrition.' }}
+              onApply={ingredient => updateAnalysis(addAnalysisFat(analysisData, addingFatRegion, ingredient))}
+              onRemove={() => setAddingFatRegion(null)} onCancel={() => setAddingFatRegion(null)} />
           </SafeAreaView>
         </Modal>
       ) : null}

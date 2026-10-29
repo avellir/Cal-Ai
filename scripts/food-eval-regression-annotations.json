@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "source": "User verdicts in photo-food/app-vs-reference-comparison.md; estimated references, not weighed ground truth.",
+  "photos": {
+    "12597085-A-slice-of-cheesecake-with-raspberries.jpg": { "dishAliases": [["cheesecake", "raspberry cheesecake", "cheesecake with raspberries", "cheesecake slices", "raspberry cheesecake slices"]] },
+    "luisa-brimble-vIm26fn_QKg-unsplash.jpg": { "fatExpected": true },
+    "no-revisions-gA81ZTsql68-unsplash.jpg": { "weightGrams": null, "volumeMl": 220 },
+    "joseph-gonzalez-QaGDmf5tMiE-unsplash.jpg": {
+      "scope": [{ "aliases": ["tea", "black tea", "tea cup", "cup of tea"], "included": false }, { "aliases": ["jam toast", "toast with jam", "bread with jam"], "included": false }]
+    },
+    "anh-nguyen-kcA-c3f_3FE-unsplash.jpg": {
+      "ingredients": [{ "aliases": ["quail egg", "quail eggs", "boiled quail eggs", "hard-boiled quail eggs", "hard-boiled eggs", "small eggs", "egg", "boiled egg", "boiled eggs"], "visibleCount": 2, "visibleFraction": 1, "itemType": "quail egg" }]
+    },
+    "anna-pelzer-IGfIGP5ONV0-unsplash.jpg": {
+      "ingredients": [{ "aliases": ["avocado", "sliced avocado", "raw avocado"], "visibleCount": 1, "visibleFraction": 0.5, "itemType": "avocado" }]
+    },
+    "stock-photo-classic-italian-pasta-penne-alla-arrabiata-with-basil-and-freshly-grated-parmesan-cheese-on-dark-2484723643.jpg": {
+      "unexpectedWarningPatterns": ["cooked penne pasta: 200.0g is outside", "tomato sauce: 80.0g is outside"]
+    }
+  }
+}

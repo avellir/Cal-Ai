@@ -5,7 +5,7 @@ import { useMealDraftStore } from '@/store/mealDraftStore';
 import type { NutritionReference } from '@/lib/nutrition-types';
 
 const reference: NutritionReference = {
-  id: 'usda:fixture', name: 'Prepared borscht soup', source: 'usda', basisAmount: 100, basisUnit: 'g',
+  id: 'fatsecret:fixture', name: 'Prepared borscht soup', source: 'fatsecret', basisAmount: 100, basisUnit: 'g',
   nutrients: { calories: 50, protein: 2, carbs: 7, fat: 1.5 }, servings: [{ name: '1 bowl', grams: 300 }], recipeAverage: true,
 };
 const visible = (name: string, quantity: number, regionIndex: number) => ({
@@ -71,7 +71,7 @@ it('allows incomplete drafts for correction but requires explicit complete nutri
   expect(useMealDraftStore.getState().updateDraft('user', id, override)).toBe(true);
   expect(useMealDraftStore.getState().drafts[id].nutritionOverride?.calories).toBe(500);
   expect(getMealInputError(override)).toBeNull();
-  const correction = recalculateAnalysis(data, [resolveIngredient(data.ingredients[0], reference)]);
+  const correction = recalculateAnalysis(data, [resolveIngredient(correctIngredientAmount(data.ingredients[0], 100, 'g'), reference)]);
   useMealDraftStore.getState().updateAnalysis('user', id, { success: true, data: correction });
   expect(useMealDraftStore.getState().drafts[id].nutritionOverride).toBeUndefined();
 });
@@ -84,4 +84,10 @@ it('keeps unresolved curry sauce while aggregating shrimp and vegetables', () =>
   expect(data.nutritionStatus).toBe('incomplete');
   expect(data.ingredients[2].scaledNutrition).toBeNull();
   expect(data.totalNutrition.calories).toBe(105);
+});
+
+it('does not scale a sauce-only reference over the full weight of a whole pasta dish', () => {
+  const pasta = { ...visible('penne with tomato sauce', 320, 0), representation: 'whole_dish' as const };
+  expect(() => resolveIngredient(pasta, { ...reference, name: 'Tomato products, canned, sauce' })).toThrow('only a component');
+  expect(resolveIngredient(pasta, { ...reference, name: 'Pasta with tomato sauce' }).quantity).toBe(320);
 });

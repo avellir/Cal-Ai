@@ -17,10 +17,10 @@ const recognize = (regions: ReturnType<typeof region>[]) => vision.mockResolvedV
 beforeEach(() => {
   vision.mockReset();
   (lookupFoodNutrition as jest.Mock).mockImplementation(async queries => queries.map((query: string) => {
-    // Fixed provider fixtures isolate recognition/portion behavior from USDA search ranking.
+    // Fixed provider fixtures isolate recognition/portion behavior from FatSecret search ranking.
     const calories: Record<string, number> = { 'scrambled eggs': 149, bread: 265, salmon: 208, chicken: 165 };
     return { query, candidates: [], match: query === 'orange juice' ? null : {
-      id: 'usda:fixture', name: query, source: 'usda', basisAmount: 100, basisUnit: 'g', servings: [],
+      id: 'fatsecret:fixture', name: query, source: 'fatsecret', basisAmount: 100, basisUnit: 'g', servings: [],
       nutrients: { calories: calories[query] ?? 100, protein: 10, carbs: 10, fat: 2 },
     } };
   }));
@@ -37,9 +37,26 @@ it('keeps a multi-ingredient egg plate and scales each visible quantity once', a
   expect(result.success).toBe(true);
   expect(result.data?.ingredients.map(ingredient => [ingredient.name, ingredient.quantity])).toEqual([['scrambled eggs', 160], ['bread', 80]]);
   expect(result.data?.totalNutrition.calories).toBeCloseTo(450.4);
-  expect(result.data?.ingredients[0].source).toBe('usda');
+  expect(result.data?.ingredients[0].source).toBe('fatsecret');
   expect(result.data?.adjustments).toBeUndefined();
   expect(result.data?.warnings?.join(' ')).toContain('single-serving guideline');
+});
+
+it('keeps healthy nutrition and an incomplete subtotal when another ingredient lookup fails', async () => {
+  recognize([region('Egg plate', [food('scrambled eggs', 160), food('bread', 80)])]);
+  (lookupFoodNutrition as jest.Mock).mockResolvedValueOnce([
+    { query: 'scrambled eggs', match: { id: 'fatsecret:1', name: 'Scrambled eggs', source: 'fatsecret', basisAmount: 100,
+      basisUnit: 'g', servings: [], nutrients: { calories: 149, protein: 10, carbs: 10, fat: 2 } }, candidates: [] },
+    { query: 'bread', match: null, candidates: [], reason: 'Nutrition service timed out. Try again shortly.',
+      failure: { stage: 'details', code: 'timeout', retryable: true, attempts: 3 } },
+  ]);
+  const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
+  expect(result.success).toBe(true);
+  expect(result.data?.nutritionStatus).toBe('incomplete');
+  expect(result.data?.ingredients[0].scaledNutrition?.calories).toBeCloseTo(238.4);
+  expect(result.data?.ingredients[1]).toEqual(expect.objectContaining({ name: 'bread', quantity: 80,
+    nutritionStatus: 'unresolved', nutrition: null, scaledNutrition: null, unresolvedReason: 'Nutrition service timed out. Try again shortly.' }));
+  expect(result.data?.totalNutrition.calories).toBeCloseTo(238.4);
 });
 
 it('retains every reliable ingredient in a complex bowl', async () => {

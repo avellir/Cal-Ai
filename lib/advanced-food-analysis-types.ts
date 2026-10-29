@@ -18,6 +18,15 @@
 import type { NutritionReference } from '@/lib/nutrition-types';
 
 export type FoodRegion = {
+  fatAssessment?: 'visible_separate' | 'ambiguous' | 'none_visible' | 'included_in_dish';
+  fatEvidence?: string;
+  fatConfirmed?: boolean;
+  scope?: 'main' | 'accompaniment' | 'background' | 'uncertain';
+  selected?: boolean;
+  servingConfirmationRequired?: boolean;
+  servingConfirmed?: boolean;
+  reviewReasons?: string[];
+  reviewConfirmed?: boolean;
   description: string; // e.g., "main protein on left side of plate"
   dishName?: string; // e.g., "chicken stir-fry"
   boundingBox?: {
@@ -65,6 +74,17 @@ export type FoodCategory =
  * Individual ingredient with quantity and metadata
  */
 export type Ingredient = {
+  estimatedAmountRange?: { min: number; max: number; unit: 'g' | 'ml' };
+  photoAmountRange?: { min: number; max: number; unit: 'g' | 'ml' };
+  identityAlternatives?: string[];
+  nutritionIdentityKnown?: boolean;
+  extraWithWholeDish?: boolean;
+  isAddedFat?: boolean;
+  representation?: 'whole_dish' | 'component';
+  visibleCount?: number | null;
+  visibleFraction?: number | null;
+  itemType?: string | null;
+  identityUncertain?: boolean;
   name: string; // e.g., "chicken breast"
   quantity: number; // numeric value
   unit: string; // e.g., "g", "ml", "oz"
@@ -131,7 +151,7 @@ export type EnrichedIngredient = Ingredient & {
     fat: number;
   };
   servingSize?: number;
-  source?: 'fatsecret' | 'usda' | 'generic' | 'estimated' | 'manual';
+  source?: 'fatsecret' | 'generic' | 'estimated' | 'manual';
 };
 
 export type UnresolvedIngredient = Ingredient & {
@@ -161,6 +181,7 @@ export type AdvancedAnalysisResult = {
       fat: number;
     };
     ingredients: AnalysisIngredient[];
+    excludedIngredients?: AnalysisIngredient[];
     nutritionStatus?: 'complete' | 'incomplete';
     regions: FoodRegion[];
     confidence: number;
@@ -191,6 +212,11 @@ export function isFoodRegion(value: unknown): value is FoodRegion {
 
   return (
     typeof region.description === 'string' &&
+    (region.scope === undefined || ['main', 'accompaniment', 'background', 'uncertain'].includes(String(region.scope))) &&
+    ['selected', 'servingConfirmationRequired', 'servingConfirmed', 'reviewConfirmed', 'fatConfirmed'].every(key => region[key] === undefined || typeof region[key] === 'boolean') &&
+    (region.fatAssessment === undefined || ['visible_separate', 'ambiguous', 'none_visible', 'included_in_dish'].includes(String(region.fatAssessment))) &&
+    (region.fatEvidence === undefined || typeof region.fatEvidence === 'string') &&
+    (region.reviewReasons === undefined || Array.isArray(region.reviewReasons) && region.reviewReasons.every(reason => typeof reason === 'string')) &&
     (region.dishName === undefined || typeof region.dishName === 'string') &&
     typeof region.confidence === 'number' &&
     region.confidence >= 0 &&
@@ -237,6 +263,21 @@ export function isIngredient(value: unknown): value is Ingredient {
 
   return (
     typeof ingredient.name === 'string' &&
+    (ingredient.representation === undefined || ['whole_dish', 'component'].includes(String(ingredient.representation))) &&
+    ['visibleCount', 'visibleFraction'].every(key => ingredient[key] === undefined || ingredient[key] === null ||
+      typeof ingredient[key] === 'number' && Number.isFinite(ingredient[key]) && (ingredient[key] as number) > 0 &&
+      (key !== 'visibleCount' || Number.isInteger(ingredient[key])) &&
+      (key !== 'visibleFraction' || (ingredient[key] as number) <= 1)) &&
+    (ingredient.itemType === undefined || ingredient.itemType === null || typeof ingredient.itemType === 'string') &&
+    (ingredient.identityUncertain === undefined || typeof ingredient.identityUncertain === 'boolean') &&
+    ['nutritionIdentityKnown', 'extraWithWholeDish', 'isAddedFat'].every(key => ingredient[key] === undefined || typeof ingredient[key] === 'boolean') &&
+    (ingredient.identityAlternatives === undefined || Array.isArray(ingredient.identityAlternatives) && ingredient.identityAlternatives.every(item => typeof item === 'string')) &&
+    (ingredient.estimatedAmountRange === undefined || typeof ingredient.estimatedAmountRange === 'object' && ingredient.estimatedAmountRange !== null &&
+      Number.isFinite((ingredient.estimatedAmountRange as Record<string, unknown>).min) && Number.isFinite((ingredient.estimatedAmountRange as Record<string, unknown>).max) &&
+      ((ingredient.estimatedAmountRange as Record<string, unknown>).min as number) >= 0 &&
+      ((ingredient.estimatedAmountRange as Record<string, unknown>).min as number) <= (ingredient.quantity as number) &&
+      ((ingredient.estimatedAmountRange as Record<string, unknown>).max as number) >= (ingredient.quantity as number) &&
+      (ingredient.estimatedAmountRange as Record<string, unknown>).unit === ingredient.unit) &&
     ingredient.name.length > 0 &&
     typeof ingredient.quantity === 'number' &&
     Number.isFinite(ingredient.quantity) && ingredient.quantity > 0 &&

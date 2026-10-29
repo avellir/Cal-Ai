@@ -5,6 +5,8 @@ type PhotoRequest = {
   mode: 'analyze' | 'refine' | 'label';
   base64Image: string;
   dishLabel?: string;
+  scopeVersion?: 'counts-scope-v1';
+  measurementVersion?: 'identity-volume-v2' | 'stable-food-v3';
 };
 
 // All image entry points produce JPEG; no provider key is bundled in the app.

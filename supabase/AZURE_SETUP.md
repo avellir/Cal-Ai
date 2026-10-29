@@ -1,5 +1,7 @@
 # Azure photo analysis deployment
 
+Optional server-only secrets `AZURE_OPENAI_VISION_DEPLOYMENT` and `AZURE_OPENAI_NUTRITION_DEPLOYMENT` select Azure deployment names separately for image analysis and nutrition matching. Both fall back to `AZURE_OPENAI_DEPLOYMENT`. No public app key changes are needed. Metadata records the actual selected deployment names. This allows benchmarking GPT-5 or another Azure image-capable deployment while keeping a cheaper nutrition selector; a model must already be deployed in the configured Azure resource. See [model research](../scripts/AZURE_FOOD_MODEL_RECOMMENDATION.md).
+
 The app now calls `analyze-food` using the signed-in user's Supabase access token.
 The function authenticates that token with Supabase Auth before calling Azure.
 Existing meal tables and data are not changed. No database migration is required.
@@ -51,7 +53,7 @@ Local tests use mocked provider responses; deployment and a live authenticated p
 Food consistency updates to this function require redeployment. The updated prompts
 preserve visible counts and portions, avoid overlapping region totals and duplicate
 whole-dish/component entries, and flag shared platters or uncertain serving scope.
-See [food accuracy notes](../scripts/FOOD_ANALYSIS_ACCURACY.md) for client fixes,
+See [nutrition setup](NUTRITION_SETUP.md) for client fixes,
 reference sources, regression coverage and live-evaluation limits.
 
 - Three fixed tasks: meal recognition, layered-food refinement, and nutrition-label reading.
@@ -63,9 +65,9 @@ reference sources, regression coverage and live-evaluation limits.
 - Best-effort burst guard: six calls/user/minute per running instance. This is NOT a global spending cap;
   use Azure limits/monitoring and add a persistent shared rate limiter before a public launch.
 - `store: false` disables Responses API response storage; other Azure service retention policies still apply.
-- Nutrition now uses the authenticated USDA nutrition-lookup function; deploy it and configure
-  USDA_API_KEY using [NUTRITION_SETUP.md](NUTRITION_SETUP.md). Unknown foods require correction
-  instead of receiving generic calories. FatSecret remains disabled.
+- Nutrition now uses the authenticated FatSecret nutrition-lookup function; deploy it and configure
+  FATSECRET_CLIENT_ID and FATSECRET_CLIENT_SECRET using [NUTRITION_SETUP.md](NUTRITION_SETUP.md). Unknown foods require correction
+  instead of receiving generic calories.
 
 References: [Azure Responses API](https://learn.microsoft.com/en-us/azure/foundry/openai/how-to/responses),
 [Supabase authentication](https://supabase.com/docs/guides/functions/auth).

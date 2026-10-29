@@ -1,7 +1,7 @@
 # Supabase Migrations
 
-For USDA nutrition lookup, follow [NUTRITION_SETUP.md](NUTRITION_SETUP.md).
-The nutrition-lookup function uses server-only USDA_API_KEY and requires no schema changes.
+For FatSecret nutrition lookup, follow [NUTRITION_SETUP.md](NUTRITION_SETUP.md).
+The nutrition-lookup function uses server-only FATSECRET_CONSUMER_KEY and FATSECRET_CONSUMER_SECRET for signed OAuth 1.0 food lookups and requires no schema changes. OAuth 2.0 client credentials remain an optional alternative where outbound IP restrictions are satisfied.
 
 For Azure photo analysis, follow [AZURE_SETUP.md](AZURE_SETUP.md). The `analyze-food`
 Edge Function uses the existing project and requires no changes to the meal tables.
