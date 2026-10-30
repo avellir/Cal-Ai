@@ -1,50 +1,69 @@
 # Current session handoff
 
-This file carries only the current handoff. GitHub Issues own task scope/status; `priority.md` owns food-analysis ordering. Check live Git status and the issue before relying on this note.
+GitHub Issues own execution status; priority.md owns ordering. Check live Git
+status and the issue before resuming. Updated 30 October 2026.
 
-## Latest publication: 30 October 2026
+## Active work
 
-- User explicitly requested pushing all changes to `main`, superseding the proposed PR recovery sequence for this publication.
-- Recovery issue: [#4](https://github.com/avellir/Cal-Ai/issues/4). Application/backend work and intended evaluation assets were committed as `2bf4794` on `feature/MOB-2-latest-2026-10-08`; remote workflow commit `1473252` was incorporated before publication.
-- Publication target: `origin/main`, direct push, no recovery PR. Check live Git state for the resulting merge commit and push status.
-- Tests, typecheck, lint and exports were not rerun, per requested testing schedule. The historical results below are the last recorded evidence, not validation of this merge.
-- Secrets, ignored evaluation output and `.cleanup-backups/` remain local. No deployment or live provider validation was performed.
-- Remaining: issue #4 review/verification and deployment parity checks remain open; device QA remains outstanding. Next action: verify the published source when requested, then resume product priorities from `priority.md`.
+- Issue: [#6](https://github.com/avellir/Cal-Ai/issues/6), context-aware portion
+  warnings and stable photo evaluation baseline.
+- Branch: feat/improve-food-analysis; fixed base is
+  2a3a38a7d5e6e130b43caa60eadf3b55254bd28f (origin/main at PR preparation).
+- Draft PR: [#7](https://github.com/avellir/Cal-Ai/pull/7), targeting main and
+  closing issue #6. Session implementation is committed/pushed as 8f83cf6;
+  the final follow-up records this PR link. No merge/deployment requested.
 
-## Previous handoff (historical)
+## Implemented
 
-- Task: [workflow setup, issue #2](https://github.com/avellir/Cal-Ai/issues/2).
-- Branch: `chore/development-workflow`, in the separate worktree `C:/Temp/cal-ai-workflow-20261029`.
-- PR: [#3](https://github.com/avellir/Cal-Ai/pull/3), squash-merged into `main` as `1473252e7fe750d9a618dd7824468fceefbe9ff3`.
-- Latest decision: use local verification; GitHub Actions is deferred. Its workflow file is removed from the proposal. The GitHub billing lock is not a prerequisite for this local process.
-- State: workflow setup is merged. Tests run only on explicit request or a clear end-of-day cue. The policy-only revision was not retested. The next candidate is recovery issue #4; no recovery implementation has started in this turn.
-- Implemented: priorities, issue/PR templates, contribution/agent instructions, `npm run verify`, and this startup/handoff routine. A Project board and unattended agent loop are not configured.
+- Renamed ten original WebP photos to immutable meal_001.webp through
+  meal_010.webp, preserving bytes. Index retains original names and SHA-256 hashes.
+- Added one photo annotation record per image, five metric definitions, S1-S4
+  failure codes, experiment protocols, weighed-meal templates and collection rules.
+  No measured meals exist; unknown grams/calorie accuracy remain unscored.
+- Checker classifies prepared/whole dishes before ingredient keywords, retains
+  consumed-portion confirmation, and uses independent visible counts/fractions.
+  Unknown counts are explicit; no count is inferred from the grams under review.
+- Herbs/microgreens have no minimum-serving warning, with an upper bound retained.
+  Meatballs and scoops use per-item rules; new unit bounds are provisional.
+- Updated canonical pipeline context and added a saved-input S3 replay script.
+  The runner does not yet automatically score the photo-record schema or measured
+  meals. Original evaluator/cache artifacts and local references remain ignored.
+- Recorded author and separate same-model version-masked warning reviews. The
+  author labeled 4 of 9 judged warnings false alarms, with four others indeterminate.
+  The separate reviewer gave 7 useful / 2 false alarms / 4 indeterminate on the
+  first revised 13-warning set. These are subjective counts, not stable rates.
+- Saved [recognition and collection plan](food-analysis-improvement-plan.md):
+  scoreable baseline, one single-pass prompt improvement, explicitly requested
+  comparison, seven development/three holdout measured meals, and stage diagnostics.
 
-## Preserve current application work
+## Actual verification
 
-The original folder `C:/Cal-Ai-feature-MOB-2` remains on `feature/MOB-2-latest-2026-10-08`, with newer FatSecret/vision changes that are not committed to GitHub. It also contains working copies of the workflow files. The workflow PR starts from the older GitHub main and does not include those application changes.
+- Last focused source state: final session checker, pipeline caller and tests
+  now in commit 8f83cf6, before documentation-only updates; Node 24.21.0.
+- npm test -- --runInBand --runTestsByPath __tests__/portionValidation.test.ts __tests__/foodAnalysisConsistency.test.ts:
+  79/79 tests passed in two suites.
+- node scripts/replay-food-portion-check.cjs: ten image hashes matched the saved
+  manifest/index; 44 original estimates matched unique raw detections. Zero
+  quantity changes, 10 warnings across 6 photos. Relative to the first revision:
+  9 texts unchanged, 1 reworded, 3 removed, none added.
+- Source hashes/per-component evidence: ignored local artifact
+  food_images/evaluation/portion-check/2026-10-29T23-40-23-185Z/results.json.
+  Committed narrative: food_images/PORTION_CHECK_RESULTS_2026-10-30.md.
+  Raw evaluation inputs/outputs are not available from a fresh checkout.
+- Checks not rerun for PR creation, per requested testing schedule. Full Jest,
+  typecheck, lint, builds/exports and device QA were not run for this session's
+  final source. Historical full lint debt (58 errors/4 warnings, 29 October) is
+  tracked by [#5](https://github.com/avellir/Cal-Ai/issues/5), not remeasured here.
+- No fresh vision/nutrition requests, meals saved, migration or deployment.
 
-Keep the original folder and `.cleanup-backups/workflow-2026-10-29/` checkpoint intact while completing [recovery issue #4](https://github.com/avellir/Cal-Ai/issues/4). Do not assume the GitHub workflow branch contains the latest running app.
+## Remaining and next action
 
-## Verification
-
-Completed local verification on 2026-10-29:
-
-| Workspace | Jest | TypeScript | Changed-file lint | iOS export | Full-lint audit |
-|---|---:|---|---|---|---|
-| Current application folder | 329/329, 33 suites | Passed | Passed | Passed | 58 errors, 4 warnings |
-| Isolated workflow branch | 189/189, 21 suites | Passed | Passed | Passed | 58 errors, 4 warnings |
-
-Both final reports have `success: true` for required checks and `sourceChangedDuringRun: false`; the existing full-lint debt is explicitly `audit_failed`. Jest now discovers only the real root test folder, excluding archived backup copies.
-
-When the user requests verification or clearly finishes work for the day, use `npm run verify -- --base origin/main` in the workspace being evaluated. Read `.cleanup-backups/local-checks/latest.json` there for the actual checked branch/commit/source fingerprint, per-check results and log paths. These are separate source snapshots; the workflow PR does not contain the newer application integration. No device QA, live provider request, meal write or production deployment was performed for this workflow change. Preserve these historical results without claiming they were rerun for the policy-only revision.
-
-## Next actions
-
-1. PR #3 is merged. Read the linked issue and live Git status before beginning recovery issue #4; keep the original uncommitted application work intact.
-2. Recover the current application/backend work through issue #4 into coherent, verified PRs.
-3. Create a GitHub Project with Backlog, Ready, Working, Waiting, In review and Done, plus priority/owner and linked PRs. This board remains to be set up.
-4. Take one ready issue per task branch; use the existing branch if work is unfinished. Keep broader food-analysis work in `priority.md` until selected.
-5. Track existing lint cleanup in [issue #5](https://github.com/avellir/Cal-Ai/issues/5). Preserve the distinction between required checks and the current full-lint audit.
-
-At the next session boundary, replace stale progress here with the actual issue/branch/PR, verification results, remaining work and immediate next action. Record unfinished work explicitly rather than marking it done.
+- Review draft PR #7 for issue #6 and preserve recorded verification limits.
+- Next implementation slice: make photo annotations scoreable with explicit match/
+  reviewer evidence and a frozen recognition baseline. Create its own issue after
+  this slice is integrated; do not imply ingredient recognition is fixed yet.
+- User can collect measured meals now. No independent holdout exists; do not tune
+  against reserved outputs or claim calorie/gram accuracy.
+- Numerical dish-level bounds and calibrated unit ranges remain future work.
+- Prior publication is already on main at 2a3a38a; recovery review/deployment
+  parity issue [#4](https://github.com/avellir/Cal-Ai/issues/4) remains open separately.
