@@ -1,0 +1,503 @@
+[
+  {
+    "id": "meal_001",
+    "visible": [
+      {
+        "item": "sushi rice",
+        "approx_grams": null
+      },
+      {
+        "item": "nori seaweed",
+        "approx_grams": null
+      },
+      {
+        "item": "salmon on nigiri",
+        "approx_grams": null
+      },
+      {
+        "item": "shrimp on nigiri",
+        "approx_grams": null
+      },
+      {
+        "item": "cucumber in rolls",
+        "approx_grams": null
+      },
+      {
+        "item": "sesame seeds",
+        "approx_grams": null
+      },
+      {
+        "item": "glaze on topped rolls",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "other seafood fillings",
+        "why": "Roll fillings are partly concealed; fish species cannot all be confirmed."
+      },
+      {
+        "item": "avocado in rolls",
+        "why": "Green fillings may include avocado, but exact composition is uncertain."
+      },
+      {
+        "item": "glaze recipe",
+        "why": "Sugar and other glaze ingredients cannot be established visually."
+      }
+    ],
+    "exclude": [],
+    "known_failures": [
+      "2026-10-29 saved run: a seafood roll remains unresolved between shrimp and fish; generic sushi references do not establish the actual roll recipe."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_002",
+    "visible": [
+      {
+        "item": "pale ice cream scoops",
+        "approx_grams": null
+      },
+      {
+        "item": "dark chocolate sauce",
+        "approx_grams": null
+      },
+      {
+        "item": "amber sauce",
+        "approx_grams": null
+      },
+      {
+        "item": "rectangular biscuits",
+        "approx_grams": null
+      },
+      {
+        "item": "chocolate pieces in bowl",
+        "approx_grams": null
+      },
+      {
+        "item": "crumbs in bowl",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "ice cream flavor",
+        "why": "Pale color does not confirm vanilla or recipe."
+      },
+      {
+        "item": "amber sauce identity",
+        "why": "Caramel is plausible but cannot be confirmed visually."
+      }
+    ],
+    "exclude": [
+      "chocolate pieces on table",
+      "crumbs on table"
+    ],
+    "known_failures": [],
+    "difficulty": "medium",
+    "weighed": false
+  },
+  {
+    "id": "meal_003",
+    "visible": [
+      {
+        "item": "broccoli florets",
+        "approx_grams": null
+      },
+      {
+        "item": "melted cheese topping",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "concealed casserole base",
+        "why": "Cheese hides the interior; rice, pasta, cream and mushroom sauce are not visually confirmed."
+      },
+      {
+        "item": "cooking fat",
+        "why": "Added oil or butter cannot be established visually."
+      }
+    ],
+    "exclude": [
+      "spoon",
+      "napkin",
+      "tablecloth",
+      "background dishes and shelving",
+      "small pitcher beside dish"
+    ],
+    "known_failures": [
+      "2026-10-29 reference recovery: selected casserole proxy contains rice and mushroom sauce, neither visually confirmed.",
+      "2026-10-29 saved run: whole shared baking dish is assessed using an inappropriate cheese-sized single-serving guideline."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_004",
+    "visible": [
+      {
+        "item": "scrambled eggs",
+        "approx_grams": null
+      },
+      {
+        "item": "toast",
+        "approx_grams": null
+      },
+      {
+        "item": "sausages",
+        "approx_grams": null
+      },
+      {
+        "item": "bacon",
+        "approx_grams": null
+      },
+      {
+        "item": "browned vegetable cubes",
+        "approx_grams": null
+      },
+      {
+        "item": "white dip",
+        "approx_grams": null
+      },
+      {
+        "item": "leafy herb garnish",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "vegetable cube identity",
+        "why": "Potato, sweet potato or other roasted vegetables cannot be separated confidently."
+      },
+      {
+        "item": "white dip recipe",
+        "why": "Yogurt, sour cream or another dip may have different nutrition."
+      },
+      {
+        "item": "cooking fat",
+        "why": "Fat used for eggs and roasting cannot be measured from appearance."
+      }
+    ],
+    "exclude": [
+      "glass of orange drink",
+      "herbs outside plate"
+    ],
+    "known_failures": [
+      "2026-10-29 saved run: white dip uses plain yogurt and browned cubes use potato references despite uncertain identities."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_005",
+    "visible": [
+      {
+        "item": "cooked grains",
+        "approx_grams": null
+      },
+      {
+        "item": "leafy greens",
+        "approx_grams": null
+      },
+      {
+        "item": "red and yellow tomatoes",
+        "approx_grams": null
+      },
+      {
+        "item": "cucumber slices",
+        "approx_grams": null
+      },
+      {
+        "item": "red onion",
+        "approx_grams": null
+      },
+      {
+        "item": "roasted cauliflower",
+        "approx_grams": null
+      },
+      {
+        "item": "orange roasted vegetable pieces",
+        "approx_grams": null
+      },
+      {
+        "item": "microgreens",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "grain species",
+        "why": "Barley or farro appearance does not establish species."
+      },
+      {
+        "item": "orange vegetable identity",
+        "why": "Squash or another orange vegetable cannot be confirmed."
+      },
+      {
+        "item": "dressing or cooking fat",
+        "why": "Oil or dressing may be present but cannot be quantified visually."
+      }
+    ],
+    "exclude": [
+      "potted plant",
+      "napkin",
+      "table surface"
+    ],
+    "known_failures": [
+      "2026-10-29 original and fresh rerun: visible cucumber is omitted from detected ingredients."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_006",
+    "visible": [
+      {
+        "item": "cooked chicken pieces",
+        "approx_grams": null
+      },
+      {
+        "item": "carrot chunks",
+        "approx_grams": null
+      },
+      {
+        "item": "celery pieces",
+        "approx_grams": null
+      },
+      {
+        "item": "pale vegetable chunks",
+        "approx_grams": null
+      },
+      {
+        "item": "broth",
+        "approx_grams": null
+      },
+      {
+        "item": "herb sprig",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "pale vegetable identity",
+        "why": "Potato or another pale vegetable is uncertain."
+      },
+      {
+        "item": "broth and added fat recipe",
+        "why": "Composition and cooking fat cannot be inferred reliably."
+      }
+    ],
+    "exclude": [
+      "spoon",
+      "napkin",
+      "herbs outside bowl"
+    ],
+    "known_failures": [
+      "2026-10-29 saved run: chicken-heavy bowl uses an average prepared-soup recipe without confirmed component proportions.",
+      "2026-10-29 saved warning: whole chicken stew is assessed against a chicken-piece serving guideline."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_007",
+    "visible": [
+      {
+        "item": "four browned meatballs",
+        "approx_grams": null
+      },
+      {
+        "item": "cooked white rice",
+        "approx_grams": null
+      },
+      {
+        "item": "white herbed sauce",
+        "approx_grams": null
+      },
+      {
+        "item": "cucumber rounds",
+        "approx_grams": null
+      },
+      {
+        "item": "red and yellow tomatoes",
+        "approx_grams": null
+      },
+      {
+        "item": "leafy herbs",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "meatball species and recipe",
+        "why": "Beef, mixed meat, binders and cooking fat cannot be confirmed."
+      },
+      {
+        "item": "white sauce recipe",
+        "why": "Yogurt-cucumber sauce is plausible; actual ingredients and fat content are unknown."
+      },
+      {
+        "item": "red pepper-like pieces",
+        "why": "Some red pieces may be pepper, but overlap with tomatoes makes identification uncertain."
+      }
+    ],
+    "exclude": [
+      "background sauce bowl",
+      "cutlery",
+      "herbs on table",
+      "partial tomato outside main bowl"
+    ],
+    "known_failures": [
+      "2026-10-29 saved run: beef reference is selected although meat species is not visually established."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  },
+  {
+    "id": "meal_008",
+    "visible": [
+      {
+        "item": "three fried eggs",
+        "approx_grams": null
+      },
+      {
+        "item": "cucumber slices",
+        "approx_grams": null
+      },
+      {
+        "item": "red bell pepper strips",
+        "approx_grams": null
+      },
+      {
+        "item": "cherry tomatoes",
+        "approx_grams": null
+      },
+      {
+        "item": "chopped green herb garnish",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "herb species",
+        "why": "Tubular garnish resembles chives; exact species needs cautious labeling."
+      },
+      {
+        "item": "frying fat",
+        "why": "Amount and identity of added frying fat cannot be confirmed."
+      }
+    ],
+    "exclude": [
+      "cup of tea beside plate",
+      "fork",
+      "knife",
+      "placemat"
+    ],
+    "known_failures": [
+      "2026-10-29 saved run: garnish is labeled dill although it looks like chives.",
+      "2026-10-29 saved warning: three eggs totaling 150 g trigger a one-egg guideline."
+    ],
+    "difficulty": "medium",
+    "weighed": false
+  },
+  {
+    "id": "meal_009",
+    "visible": [
+      {
+        "item": "pizza crust",
+        "approx_grams": null
+      },
+      {
+        "item": "melted cheese",
+        "approx_grams": null
+      },
+      {
+        "item": "tomato sauce",
+        "approx_grams": null
+      },
+      {
+        "item": "cured-meat slices",
+        "approx_grams": null
+      },
+      {
+        "item": "small herb garnish",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "cured meat identity",
+        "why": "Salami versus pepperoni cannot be established reliably."
+      },
+      {
+        "item": "pizza recipe",
+        "why": "Cheese amount, dough recipe and added oil are unknown."
+      }
+    ],
+    "exclude": [
+      "loose cured-meat slices outside pizza",
+      "basil bunch outside pizza",
+      "table surface"
+    ],
+    "known_failures": [],
+    "difficulty": "medium",
+    "weighed": false
+  },
+  {
+    "id": "meal_010",
+    "visible": [
+      {
+        "item": "dark bread",
+        "approx_grams": null
+      },
+      {
+        "item": "white spread on bread",
+        "approx_grams": null
+      },
+      {
+        "item": "banana section",
+        "approx_grams": null
+      },
+      {
+        "item": "avocado slices",
+        "approx_grams": null
+      },
+      {
+        "item": "cut fig half",
+        "approx_grams": null
+      },
+      {
+        "item": "strawberries",
+        "approx_grams": null
+      },
+      {
+        "item": "whole dark-purple fruit",
+        "approx_grams": null
+      }
+    ],
+    "uncertain": [
+      {
+        "item": "white spread identity",
+        "why": "Butter and cream cheese remain plausible alternatives."
+      },
+      {
+        "item": "whole dark fruit identity",
+        "why": "Fig versus another dark fruit is uncertain from the intact skin."
+      }
+    ],
+    "exclude": [
+      "spread block and dish beside plate",
+      "knife",
+      "napkin",
+      "woven placemat"
+    ],
+    "known_failures": [
+      "2026-10-29 saved run: butter is selected despite cream-cheese ambiguity.",
+      "2026-10-29 saved run: whole dark fruit is grouped with figs although its identity is uncertain."
+    ],
+    "difficulty": "hard",
+    "weighed": false
+  }
+]

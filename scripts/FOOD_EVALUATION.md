@@ -19,6 +19,11 @@ Nutrition requests use FatSecret. Optional `--nutrition-source=fatsecret` select
 
 ## References and annotations
 
+For the stable-ID `food_images` baseline, use the five manually reviewed metrics
+in [food_images/METRICS.md](../food_images/METRICS.md). Its `photo-records.json`
+schema is separate from the runner annotations below; these new metrics are not
+yet calculated automatically by this runner.
+
 Use `--only=<filename>` for a focused diagnostic run, or repeat `--exclude=<filename>` to omit images from a run without deleting them. The final food-only benchmark uses `--exclude=no-revisions-gA81ZTsql68-unsplash.jpg`. Exclusions are recorded in its manifest. Compare a completed run with the original and phase 1–2 snapshots using `node scripts/compare-food-evaluations.cjs <run-id>`; this reads saved artifacts and makes no provider calls.
 
 Provide photos plus `reference.json` in any folder, then use `npm run evaluate:food -- path/to/folder --fresh`. A separate holdout folder uses the same format and independent images. The runner cannot create independent ground truth from the regression photos.

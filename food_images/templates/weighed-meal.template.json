@@ -1,0 +1,43 @@
+{
+  "id": null,
+  "photo": null,
+  "components": [
+    {
+      "item": null,
+      "grams": null
+    }
+  ],
+  "true_kcal": null,
+  "source": {
+    "name": "USDA FoodData Central",
+    "data_type": "SR Legacy",
+    "release": "2018-04",
+    "energy_nutrient_id": 1008,
+    "references": [
+      {
+        "component_index": 0,
+        "fdc_id": null,
+        "description": null,
+        "preparation_state": null,
+        "kcal_per_100g": null,
+        "url": null,
+        "retrieved_at": null
+      }
+    ]
+  },
+  "measurement": {
+    "photographed_at": null,
+    "scale_resolution_g": null,
+    "portion_notes": null,
+    "cooking_fats": [
+      {
+        "component_index": null,
+        "grams_added": null,
+        "grams_not_consumed": null,
+        "allocation_notes": null
+      }
+    ],
+    "recipe_yield_g": null,
+    "served_recipe_g": null
+  }
+}

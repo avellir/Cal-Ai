@@ -5,11 +5,12 @@ import { runPhotoAnalysis } from '@/services/photoAnalysis';
 import { isBeverageName } from '@/services/foodNames';
 import { validateAdvancedAnalysis } from '@/services/advancedFoodValidation';
 import type { AdvancedAnalysisResult } from '@/lib/advanced-food-analysis-types';
+import type { VisionIngredient } from '@/services/photoMeasurements';
 
 jest.mock('@/services/photoAnalysis', () => ({ runPhotoAnalysis: jest.fn() }));
 jest.mock('@/services/nutritionLookup', () => ({ lookupFoodNutrition: jest.fn() }));
 const vision = runPhotoAnalysis as jest.Mock;
-type VisibleIngredient = { name: string; weight_grams: number; confidence: number };
+type VisibleIngredient = VisionIngredient;
 const food = (name: string, weight_grams: number, confidence = 90): VisibleIngredient => ({ name, weight_grams, confidence });
 const region = (description: string, ingredients: VisibleIngredient[]) => ({ description, dishName: description, confidence: 90, ingredients });
 const recognize = (regions: ReturnType<typeof region>[]) => vision.mockResolvedValueOnce(JSON.stringify({ regions, overallConfidence: 90, notes: '' }));
@@ -39,7 +40,19 @@ it('keeps a multi-ingredient egg plate and scales each visible quantity once', a
   expect(result.data?.totalNutrition.calories).toBeCloseTo(450.4);
   expect(result.data?.ingredients[0].source).toBe('fatsecret');
   expect(result.data?.adjustments).toBeUndefined();
-  expect(result.data?.warnings?.join(' ')).toContain('single-serving guideline');
+  expect(result.data?.warnings?.join(' ')).toContain('Count unknown');
+});
+
+it('passes vision counts and dish identity through to portion validation', async () => {
+  recognize([region('Eggs and stew', [
+    { ...food('Fried chicken eggs', 150), visible_count: 3, visible_fraction: 1, item_type: 'egg', representation: 'component' },
+    { ...food('Chicken vegetable stew', 700), representation: 'whole_dish' },
+  ])]);
+  const result = await analyzeFoodImageAdvanced('file:///photo.jpg', 'jpeg');
+  expect(result.success).toBe(true);
+  expect(result.data?.ingredients.map(item => item.quantity)).toEqual([150, 700]);
+  expect(result.data?.warnings?.join(' ')).not.toContain('single-serving guideline');
+  expect(result.data?.warnings?.join(' ')).not.toContain('Count inferred');
 });
 
 it('keeps healthy nutrition and an incomplete subtotal when another ingredient lookup fails', async () => {
