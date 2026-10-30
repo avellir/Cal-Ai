@@ -9,8 +9,9 @@ status and the issue before resuming. Updated 30 October 2026.
   warnings and stable photo evaluation baseline.
 - Branch: feat/improve-food-analysis; fixed base is
   2a3a38a7d5e6e130b43caa60eadf3b55254bd28f (origin/main at PR preparation).
-- User requested a PR for this session. Session files are being committed and
-  pushed; draft PR link will be recorded once created. No merge/deployment requested.
+- Draft PR: [#7](https://github.com/avellir/Cal-Ai/pull/7), targeting main and
+  closing issue #6. Session implementation is committed/pushed as 8f83cf6;
+  the final follow-up records this PR link. No merge/deployment requested.
 
 ## Implemented
 
@@ -37,8 +38,8 @@ status and the issue before resuming. Updated 30 October 2026.
 
 ## Actual verification
 
-- Last focused source state: final session checker, pipeline caller and tests,
-  before subsequent documentation-only updates; Node 24.21.0.
+- Last focused source state: final session checker, pipeline caller and tests
+  now in commit 8f83cf6, before documentation-only updates; Node 24.21.0.
 - npm test -- --runInBand --runTestsByPath __tests__/portionValidation.test.ts __tests__/foodAnalysisConsistency.test.ts:
   79/79 tests passed in two suites.
 - node scripts/replay-food-portion-check.cjs: ten image hashes matched the saved
@@ -57,7 +58,7 @@ status and the issue before resuming. Updated 30 October 2026.
 
 ## Remaining and next action
 
-- Review the draft PR for issue #6 and preserve recorded verification limits.
+- Review draft PR #7 for issue #6 and preserve recorded verification limits.
 - Next implementation slice: make photo annotations scoreable with explicit match/
   reviewer evidence and a frozen recognition baseline. Create its own issue after
   this slice is integrated; do not imply ingredient recognition is fixed yet.
