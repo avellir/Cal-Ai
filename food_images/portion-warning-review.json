@@ -1,0 +1,136 @@
+{
+  "scope": "Manual review of warning appropriateness on the ten tuning photos; not measured weight accuracy or independent QA.",
+  "baseline_artifact": "evaluation/portion-check/2026-10-29T23-20-04-216Z/results.json",
+  "revised_artifact": "evaluation/portion-check/2026-10-29T23-30-02-789Z/results.json",
+  "labels": {
+    "useful": "Requests missing count or consumed-portion information without asserting unsupported weight error.",
+    "false_alarm": "The guideline is inappropriate to the visible food/count/role; this does not establish its true weight.",
+    "indeterminate": "A serving-range warning remains, but the photo cannot establish whether the quantity needs correction."
+  },
+  "warnings": [
+    {
+      "photo_id": "meal_002",
+      "item": "Vanilla ice cream",
+      "change": "unchanged",
+      "label": "false_alarm",
+      "reason": "Several scoops are visible; applying a small generic dairy single-serving upper bound to their total does not account for the multi-scoop dessert."
+    },
+    {
+      "photo_id": "meal_002",
+      "item": "Chocolate sauce",
+      "change": "unchanged",
+      "label": "indeterminate",
+      "reason": "35 g exceeds the existing 30 g serving bound, but the visible drizzle cannot establish its mass."
+    },
+    {
+      "photo_id": "meal_003",
+      "item": "Broccoli cheese casserole",
+      "change": "reworded",
+      "label": "useful",
+      "reason": "Confirms the consumed amount of a shared baking dish; no cheese-sized range is applied."
+    },
+    {
+      "photo_id": "meal_004",
+      "item": "Scrambled eggs",
+      "change": "reworded",
+      "label": "useful",
+      "reason": "No vision egg count is supplied. Requests that information without deriving count from grams."
+    },
+    {
+      "photo_id": "meal_004",
+      "item": "Toast",
+      "change": "added",
+      "label": "useful",
+      "reason": "The saved vision result has slice item type but no visible count. The new note exposes that missing count rather than inventing one from 110 g."
+    },
+    {
+      "photo_id": "meal_004",
+      "item": "Yogurt",
+      "change": "unchanged",
+      "label": "indeterminate",
+      "reason": "Both the dip recipe and its mass are uncertain. A 70 g estimate versus a 60 g bound alone cannot establish a false alarm or weight error."
+    },
+    {
+      "photo_id": "meal_004",
+      "item": "Parsley",
+      "change": "unchanged",
+      "label": "false_alarm",
+      "reason": "A small garnish receives the 5 g minimum for a broad garnish serving. Its visibly minor role does not warrant a minimum-serving warning."
+    },
+    {
+      "photo_id": "meal_005",
+      "item": "Microgreens",
+      "change": "unchanged",
+      "label": "false_alarm",
+      "reason": "A small garnish receives the unknown-food 10 g minimum. The guideline ignores its garnish role."
+    },
+    {
+      "photo_id": "meal_006",
+      "item": "Chicken and vegetable stew",
+      "change": "reworded",
+      "label": "useful",
+      "reason": "Vision requested serving confirmation. The revised message asks how much of the prepared dish was consumed, without a chicken-piece range."
+    },
+    {
+      "photo_id": "meal_007",
+      "item": "Cooked meatballs",
+      "change": "unchanged",
+      "label": "false_alarm",
+      "reason": "Four meatballs are visible and counted in the saved result, but the checker still applies an unknown-food single-serving range to their combined mass."
+    },
+    {
+      "photo_id": "meal_007",
+      "item": "Cooked white rice",
+      "change": "unchanged",
+      "label": "indeterminate",
+      "reason": "The existing 150 g grain bound is exceeded; without a weighed portion its applicability to this rice serving is uncertain."
+    },
+    {
+      "photo_id": "meal_007",
+      "item": "Yogurt cucumber sauce",
+      "change": "unchanged",
+      "label": "indeterminate",
+      "reason": "A substantial sauce portion is visible, but neither actual grams nor recipe are measured; no reliable true/false alarm verdict."
+    },
+    {
+      "photo_id": "meal_009",
+      "item": "Pepperoni pizza",
+      "change": "reworded",
+      "label": "useful",
+      "reason": "A whole pizza is shown with a serving-confirmation flag. Asking for the consumed portion replaces a single-serving numeric warning."
+    }
+  ],
+  "removed": [
+    {
+      "photo_id": "meal_008",
+      "item": "Fried chicken eggs",
+      "reason": "The explicit visible count of three yields a 135-180 g range; the existing 150 g estimate falls within it."
+    }
+  ],
+  "summary": {
+    "baseline_warnings": 13,
+    "revised_warnings": 13,
+    "unchanged": 8,
+    "reworded": 4,
+    "added": 1,
+    "removed": 1,
+    "useful": 5,
+    "false_alarm": 4,
+    "indeterminate": 4,
+    "false_alarm_rate_among_judged": {
+      "numerator": 4,
+      "denominator": 9
+    },
+    "confirmed_false_alarm_share_of_all": {
+      "numerator": 4,
+      "denominator": 13
+    },
+    "limitation": "Four warnings are indeterminate; 4/9 is the rate among judged warnings only, and 4/13 is a lower bound across all warnings. Labels are subjective review by the implementing agent, not measured accuracy. No prior useful-warning labels were established by the original report.",
+    "reporting_note": "Report 4 of 9 judged warnings, with 4 of 13 indeterminate. This small tuning-set count is unstable: changing one label with the same denominator changes the fraction by one ninth. Do not present a stable percentage estimate."
+  },
+  "reviewer": {
+    "role": "implementing agent",
+    "independent": false,
+    "version_blinded": false
+  }
+}

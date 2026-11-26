@@ -312,7 +312,14 @@ export async function analyzeFoodImageAdvanced(imageUri: string, base64Image?: s
                 // the generic portion constraints are tuned for solids.
                 if (ing.unit === 'ml' || isBeverageIngredient(ing.name)) return ing;
 
-                const validation = validatePortionSize(ing.name, ing.quantity, 'g');
+                const region = segmentationData.regions[ing.regionIndex ?? 0];
+                const validation = validatePortionSize(ing.name, ing.quantity, 'g', {
+                    representation: ing.representation,
+                    visibleCount: ing.visibleCount,
+                    visibleFraction: ing.visibleFraction,
+                    itemType: ing.itemType,
+                    servingConfirmationRequired: region?.servingConfirmationRequired && !region.servingConfirmed,
+                });
                 if (validation.warning) warnings.push(validation.warning);
 
                 if (validation.wasAdjusted) {

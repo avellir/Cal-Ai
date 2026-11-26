@@ -28,9 +28,14 @@ export interface ValidationResult {
   warning?: string;
 }
 
-interface ImageContext {
+export interface PortionContext {
   plateSize?: number;
   referenceObjects?: string[];
+  representation?: 'whole_dish' | 'component';
+  visibleCount?: number | null;
+  visibleFraction?: number | null;
+  itemType?: string | null;
+  servingConfirmationRequired?: boolean;
 }
 
 /**
@@ -106,6 +111,34 @@ const SPECIFIC_ITEM_CONSTRAINTS: Record<string, PortionConstraint> = {
   'red pepper paste': { min: 10, max: 25, typical: 15 },
 };
 
+// Per-item guidelines are separate from serving guidelines (e.g. rice or yogurt).
+// Scrambled-egg servings can contain several eggs, so use the egg unit here.
+const COUNTABLE_ITEM_CONSTRAINTS: { names: string[]; unitNames?: string[]; constraint: PortionConstraint }[] = [
+  { names: ['egg'], constraint: { min: 45, max: 60, typical: 50 } },
+  { names: ['chicken breast'], constraint: { min: 80, max: 150, typical: 120 } },
+  { names: ['bread slice', 'toast', 'slice of bread'], constraint: { min: 25, max: 40, typical: 35 } },
+  // Broad review heuristics, not calibrated bounds or image-derived measurements.
+  { names: ['meatball', 'meatballs'], constraint: { min: 10, max: 80, typical: 40 } },
+  { names: ['ice cream'], unitNames: ['scoop', 'scoops'], constraint: { min: 30, max: 120, typical: 60 } },
+];
+
+const HERB_KEYWORDS = [
+  'basil', 'parsley', 'cilantro', 'dill', 'mint', 'chives', 'rosemary', 'thyme',
+  'herb', 'microgreen', 'microgreens',
+];
+
+function isPreparedDish(name: string): boolean {
+  // A named component of a pizza is still an ingredient.
+  if (CATEGORY_KEYWORDS.pizzaDough.some(keyword => containsFoodPhrase(name, keyword))) return false;
+  const componentNames = ['pizza sauce', 'salad dressing', 'salad greens', 'curry paste', 'curry powder', 'curry sauce', 'curry leaves', 'soup stock', 'soup base'];
+  const normalized = normalizeFoodName(name);
+  if (componentNames.some(component => normalized === component || normalized.endsWith(` ${component}`))) return false;
+  return [...CATEGORY_KEYWORDS.completeDish,
+    'soup', 'stew', 'casserole', 'curry', 'lasagna', 'lasagne', 'risotto',
+    'stir fry', 'fried rice', 'loaded fries', 'sushi', 'nigiri', 'omelet', 'omelette', 'salad', 'bake',
+  ].some(keyword => containsFoodPhrase(name, keyword));
+}
+
 /**
  * Keywords for categorizing ingredients by name
  */
@@ -160,6 +193,7 @@ const CATEGORY_KEYWORDS: Record<FoodCategory, string[]> = {
   ],
   garnish: [
     'basil', 'parsley', 'cilantro', 'dill', 'mint', 'chives', 'rosemary', 'thyme', 'herbs',
+    'microgreen', 'microgreens',
     'olive', 'olives', 'kalamata', 'pickle', 'pickles', 'pickled', 'gherkin',
     'caper', 'capers', 'radish', 'radishes', 'cornichon', 'jalapeño', 'jalapeno',
     'sun-dried tomato', 'sundried tomato', 'anchovy', 'anchovies', 'artichoke hearts'
@@ -180,6 +214,7 @@ const CATEGORY_KEYWORDS: Record<FoodCategory, string[]> = {
  * Categorize an ingredient based on its name
  */
 export function categorizeIngredient(ingredientName: string): FoodCategory {
+  if (isPreparedDish(ingredientName)) return 'completeDish';
   const priority: FoodCategory[] = ['pizzaDough', 'oil', 'spread', 'condiment',
     'leafyGreen', 'completeDish', 'protein', 'grain', 'vegetable', 'fruit', 'dairy', 'fat', 'garnish'];
   for (const category of priority) {
@@ -242,7 +277,7 @@ function calculateConfidencePenalty(
  * @param ingredientName - Name of the ingredient
  * @param quantity - Estimated quantity
  * @param unit - Unit of measurement
- * @param imageContext - Optional context from image analysis
+ * @param context - Canonical identity, count and serving context from vision
  * @returns Validation result with adjusted quantity and confidence penalty
  * @throws Error if inputs are invalid
  */
@@ -250,7 +285,7 @@ export function validatePortionSize(
   ingredientName: string,
   quantity: number,
   unit: Unit,
-  imageContext?: ImageContext
+  context?: PortionContext
 ): ValidationResult {
   // Input validation
   if (!ingredientName || ingredientName.trim().length === 0) {
@@ -272,19 +307,27 @@ export function validatePortionSize(
   }
 
   // Categorize the ingredient
-  const category = categorizeIngredient(ingredientName);
+  const preparedDish = context?.representation === 'whole_dish' || isPreparedDish(ingredientName);
+  const category = preparedDish ? 'completeDish' : categorizeIngredient(ingredientName);
 
   // Check for specific item constraints first (more accurate than category defaults)
   const name = normalizeFoodName(ingredientName);
   const specificItems = Object.entries(SPECIFIC_ITEM_CONSTRAINTS);
   const exact = specificItems.find(([itemName]) => normalizeFoodName(itemName) === name);
-  const specific = exact ?? specificItems.sort(([a], [b]) => b.length - a.length)
+  const specific = preparedDish ? undefined : exact ?? specificItems.sort(([a], [b]) => b.length - a.length)
     .find(([itemName]) => containsFoodPhrase(name, itemName));
   let constraints = specific?.[1];
   
   // Fall back to category constraints if no specific match
   if (!constraints) {
     constraints = PORTION_CONSTRAINTS[category];
+  }
+
+  // A garnish need not reach a minimum serving mass. Keep the upper review
+  // bound; this does not exempt substantial herb quantities or non-herb pickles.
+  if (!preparedDish && category === 'garnish' &&
+    HERB_KEYWORDS.some(keyword => containsFoodPhrase(name, keyword))) {
+    constraints = { ...PORTION_CONSTRAINTS.garnish, min: 0 };
   }
 
   // Normalize quantity to grams/ml
@@ -304,9 +347,50 @@ export function validatePortionSize(
   let reason = '';
   let confidencePenalty = 0;
 
-  const warning = normalizedQuantity < constraints.min || normalizedQuantity > constraints.max
-    ? `${ingredientName}: ${normalizedQuantity.toFixed(1)}${unit === 'ml' ? 'ml' : 'g'} is outside the single-serving guideline (${constraints.min}-${constraints.max}). Confirm the visible portion and number of servings.`
-    : undefined;
+  let warning: string | undefined;
+  if (preparedDish) {
+    // Whole recipes and shared dishes have no reliable ingredient-sized range.
+    // Scope review already owns confirmation; do not invent a serving count.
+    reason = `${ingredientName}: Prepared dish; per-ingredient serving guidelines skipped.`;
+    if (context?.servingConfirmationRequired) {
+      warning = `${ingredientName}: Confirm the consumed portion of this prepared or shared dish.`;
+    }
+  } else {
+    const countable = unit === 'g' ? COUNTABLE_ITEM_CONSTRAINTS.find(rule =>
+      (rule.names.some(item => containsFoodPhrase(name, item)) ||
+        rule.names.some(item => containsFoodPhrase(context?.itemType ?? '', item))) &&
+      (!rule.unitNames || rule.unitNames.some(item =>
+        containsFoodPhrase(name, item) || containsFoodPhrase(context?.itemType ?? '', item)))) : undefined;
+    let countNote = '';
+    let countUnknown = false;
+    if (countable) {
+      const supplied = context?.visibleCount;
+      const hasCount = typeof supplied === 'number' && Number.isInteger(supplied) && supplied > 0;
+      const fraction = context?.visibleFraction;
+      const consumedFraction = typeof fraction === 'number' && Number.isFinite(fraction) && fraction > 0 && fraction <= 1
+        ? fraction : 1;
+      if (hasCount) {
+        const count = supplied * consumedFraction;
+        constraints = {
+          min: countable.constraint.min * count,
+          max: countable.constraint.max * count,
+          typical: countable.constraint.typical * count,
+        };
+        countNote = ` Using the visible count (${supplied})${consumedFraction < 1 ? ` and visible fraction (${consumedFraction})` : ''}.`;
+      } else {
+        // The quantity under review cannot provide independent count evidence.
+        countUnknown = true;
+      }
+    }
+    const outside = !countUnknown && (normalizedQuantity < constraints.min || normalizedQuantity > constraints.max);
+    const range = `${Number(constraints.min.toFixed(2))}-${Number(constraints.max.toFixed(2))}`;
+    if (outside) {
+      warning = `${ingredientName}: ${normalizedQuantity.toFixed(1)}${unit === 'ml' ? 'ml' : 'g'} is outside the ${countable ? 'count-based' : 'single-serving'} guideline (${range}).${countNote} Confirm the visible portion and number of servings.`;
+    } else if (countUnknown) {
+      warning = `${ingredientName}: Count unknown; the per-item guideline cannot be checked. Confirm the item count and consumed portion.`;
+    }
+    reason = warning ?? `${ingredientName}: Portion size within the guideline for ${category}.${countNote}`;
+  }
 
   // Guidelines do not establish the amount eaten. Keep toppings and multi-serving
   // quantities; cap only values beyond the supported vision schema's ceiling.
@@ -315,8 +399,6 @@ export function validatePortionSize(
     wasAdjusted = true;
     reason = `${ingredientName}: Portion exceeded the supported 10000g/ml limit and was capped. Confirm the portion before saving.`;
     confidencePenalty = calculateConfidencePenalty(normalizedQuantity, adjustedQuantity, category);
-  } else {
-    reason = warning ?? `${ingredientName}: Portion size within the guideline for ${category}.`;
   }
 
   // Convert back to original unit if needed
@@ -376,10 +458,10 @@ export function validateTotalMealWeight(
  * @returns Array of validation results
  */
 export function validateIngredients(
-  ingredients: { name: string; quantity: number; unit: Unit }[],
-  imageContext?: ImageContext
+  ingredients: ({ name: string; quantity: number; unit: Unit } & PortionContext)[],
+  context?: PortionContext
 ): ValidationResult[] {
   return ingredients.map(ingredient =>
-    validatePortionSize(ingredient.name, ingredient.quantity, ingredient.unit, imageContext)
+    validatePortionSize(ingredient.name, ingredient.quantity, ingredient.unit, { ...context, ...ingredient })
   );
 }

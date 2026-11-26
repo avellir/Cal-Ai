@@ -1,0 +1,62 @@
+[
+  {
+    "id": "meal_001",
+    "original_filename": "assorted-sushi-platter-with-shrimp-and-salmon-kHY_UC_FNpClDnnQR1iDA.webp",
+    "filename": "meal_001.webp",
+    "sha256": "93f6abfd014267a5082e12ae5154fa303ebc526783f73bb9da71b723b227fde1"
+  },
+  {
+    "id": "meal_002",
+    "original_filename": "bowl-of-ice-cream-with-chocolate-labZgS7rWlAKNphP8l9jI.webp",
+    "filename": "meal_002.webp",
+    "sha256": "b97b8b6fa9945d403bdb50f126c9a9a173e1fd3451516c4bb93c7b98aa1a23d6"
+  },
+  {
+    "id": "meal_003",
+    "original_filename": "cheesy-broccoli-casserole-delight-poiZMAM7WniettuDqIrD-.webp",
+    "filename": "meal_003.webp",
+    "sha256": "426e806ba2a9f820a16258b13c891b3140355b7bf421dcebea255e9e767f6141"
+  },
+  {
+    "id": "meal_004",
+    "original_filename": "colorful-breakfast-spread-on-a-rustic-plate.webp",
+    "filename": "meal_004.webp",
+    "sha256": "037a52b2dca71386c5aa1243641336d50b9eb1e9058669a97e652f0449a2d3e3"
+  },
+  {
+    "id": "meal_005",
+    "original_filename": "colorful-grain-salad-with-fresh-vegetables.webp",
+    "filename": "meal_005.webp",
+    "sha256": "cff5b69c755c126ffe50fb56ff4d1da198699011d3bae16508760d8d2f417128"
+  },
+  {
+    "id": "meal_006",
+    "original_filename": "hearty-chicken-vegetable-soup-recipe-Eayiw2-g_LBQSZJcMCmY6.webp",
+    "filename": "meal_006.webp",
+    "sha256": "60d18214551afda9bad69e334f6413f06b2bb74ccbfc8ab76c16522e63ccd211"
+  },
+  {
+    "id": "meal_007",
+    "original_filename": "mediterranean-meatballs-with-rice-and-fresh-vegetables-KogEOoEaclqrHyZUW3CU8.webp",
+    "filename": "meal_007.webp",
+    "sha256": "1799f5235c486285dc256919e6c4a5db21ce9e7ddf56f6326f04f03f0da4158d"
+  },
+  {
+    "id": "meal_008",
+    "original_filename": "paleo-breakfast-eggs-with-vegetables-outside-2-QF_NnNKFynMPjViF8wEVl.webp",
+    "filename": "meal_008.webp",
+    "sha256": "a2f2317e721f9898e65263d7d34ebad73ca7a10e397b6c734c6b9588fcd99bbf"
+  },
+  {
+    "id": "meal_009",
+    "original_filename": "pizza-salami-DGmC7UGytWmaeO5xx0fbK.webp",
+    "filename": "meal_009.webp",
+    "sha256": "51a7af2612744428bb346b118b9962e5ea6d297f4f5957714997b7465af9b98e"
+  },
+  {
+    "id": "meal_010",
+    "original_filename": "quick-summer-breakfast-2lqCWsMw4W3zLUMsrlIAp.webp",
+    "filename": "meal_010.webp",
+    "sha256": "6b3df1ea939281e0e7ed86ae8523e3e78152fd9c945dd0180a6597d19d8a27b8"
+  }
+]

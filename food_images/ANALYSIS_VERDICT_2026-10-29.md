@@ -25,7 +25,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 1. Sushi platter
 
-[Open original photo](assorted-sushi-platter-with-shrimp-and-salmon-kHY_UC_FNpClDnnQR1iDA.webp)
+[Open original photo](meal_001.webp)
 
 **What I see:** About 12 visible pieces: three nori-outside rolls, three rice-outside seafood rolls, three salmon nigiri, one shrimp nigiri, and two glazed/topped rolls. Rice, seaweed, green fillings, sesame and glaze are visible.
 
@@ -43,7 +43,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 2. Ice-cream sundae
 
-[Open original photo](bowl-of-ice-cream-with-chocolate-labZgS7rWlAKNphP8l9jI.webp)
+[Open original photo](meal_002.webp)
 
 **What I see:** Several pale ice-cream scoops with dark chocolate sauce, amber sauce, upright rectangular biscuits, chocolate chunks and crumbs in the bowl. Additional chocolate and crumbs sit on the table.
 
@@ -61,7 +61,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 3. Broccoli-cheese casserole
 
-[Open original photo](cheesy-broccoli-casserole-delight-poiZMAM7WniettuDqIrD-.webp)
+[Open original photo](meal_003.webp)
 
 **What I see:** Broccoli florets under a substantial melted yellow cheese topping in a large oval baking dish. Interior base is concealed.
 
@@ -75,7 +75,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 4. Large cooked breakfast
 
-[Open original photo](colorful-breakfast-spread-on-a-rustic-plate.webp)
+[Open original photo](meal_004.webp)
 
 **What I see:** Scrambled eggs, two to three visible sausage bodies, bacon strips, several toast slices, orange/red browned vegetable cubes, a bowl of white dip with spice flakes, and a glass of orange liquid on the plate.
 
@@ -95,7 +95,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 5. Grain and vegetable salad
 
-[Open original photo](colorful-grain-salad-with-fresh-vegetables.webp)
+[Open original photo](meal_005.webp)
 
 **What I see:** A substantial cooked grain base resembling barley/farro, leafy greens, red and yellow tomatoes, cucumber slices, red onion, roasted cauliflower, orange roasted vegetable pieces, herbs and microgreens.
 
@@ -115,7 +115,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 6. Chicken and vegetable soup
 
-[Open original photo](hearty-chicken-vegetable-soup-recipe-Eayiw2-g_LBQSZJcMCmY6.webp)
+[Open original photo](meal_006.webp)
 
 **What I see:** A bowl filled with numerous large cooked chicken pieces, carrot chunks, celery and pale vegetable pieces in broth, with a small herb sprig.
 
@@ -129,7 +129,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 7. Meatballs, rice and yogurt-style sauce
 
-[Open original photo](mediterranean-meatballs-with-rice-and-fresh-vegetables-KogEOoEaclqrHyZUW3CU8.webp)
+[Open original photo](meal_007.webp)
 
 **What I see:** Four visible browned meatballs on white rice, a substantial white herbed sauce, cucumber rounds, red/yellow tomatoes, red pepper pieces and leafy herbs.
 
@@ -148,7 +148,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 8. Fried eggs and vegetables
 
-[Open original photo](paleo-breakfast-eggs-with-vegetables-outside-2-QF_NnNKFynMPjViF8wEVl.webp)
+[Open original photo](meal_008.webp)
 
 **What I see:** Three visible fried egg yolks with whites, chopped chives, cucumber slices, red bell-pepper strips and cherry-tomato halves. A separate cup of tea sits beside the plate.
 
@@ -166,7 +166,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 9. Whole salami pizza
 
-[Open original photo](pizza-salami-DGmC7UGytWmaeO5xx0fbK.webp)
+[Open original photo](meal_009.webp)
 
 **What I see:** One whole round pizza with cured-meat slices, melted cheese, red tomato sauce, crust and small herbs. Loose cured-meat slices and a basil bunch sit outside the pizza.
 
@@ -180,7 +180,7 @@ User review and saving were skipped as requested. No test suite was run. Applica
 
 ## 10. Bread, spread, avocado and fruit
 
-[Open original photo](quick-summer-breakfast-2lqCWsMw4W3zLUMsrlIAp.webp)
+[Open original photo](meal_010.webp)
 
 **What I see:** One dark bread piece with white spread, a peeled banana section, a fan of avocado slices, a cut fig half, a whole dark-purple fruit and roughly six to seven overlapping strawberries. A large spread block/dish and knife sit beside the plate.
 

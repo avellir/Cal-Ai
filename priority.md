@@ -12,6 +12,14 @@ Canonical priority list. Reviewed 29 October 2026 against current source, saved 
 
 ## Remaining priorities
 
+The [recognition and measured-meal execution plan](docs/workflow/food-analysis-improvement-plan.md)
+starts with visible-ingredient scoring and a single-pass completeness improvement
+while measured meals are collected. It defines verifiable slices and an initial
+seven-meal development / three-meal holdout split. No new execution issues or live
+vision evaluations have been created by that planning step. The completed
+dataset/checker groundwork is tracked in [issue #6](https://github.com/avellir/Cal-Ai/issues/6);
+follow-up recognition slices remain to be created.
+
 The table orders product priorities. GitHub Issues track execution status and PRs; link them here once created. Keep detailed acceptance criteria below.
 
 | Priority | Improvement | Evidence and intended outcome |

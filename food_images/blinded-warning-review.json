@@ -1,0 +1,214 @@
+{
+  "scope": "Independent-context review of 18 unique historical warning/photo pairs; version metadata and previous labels withheld.",
+  "reviewer": {
+    "role": "separate same-model agent",
+    "independent_context": true,
+    "human": false,
+    "version_metadata_visible": false,
+    "implementation_visible": false
+  },
+  "records": [
+    {
+      "candidate_id": "04809831",
+      "label": "useful",
+      "reason": "A whole pizza is pictured, so confirming the consumed fraction and servings has clear value. The stated mass cannot be verified visually.",
+      "photo": "meal_009.webp",
+      "warning": "Pepperoni pizza: 850.0g is outside the single-serving guideline (200-800). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z"
+      ]
+    },
+    {
+      "candidate_id": "093fdeac",
+      "label": "useful",
+      "reason": "The sauce forms a substantial topping over the meal; confirming the amount included and consumed has review value. Its mass remains unverified.",
+      "photo": "meal_007.webp",
+      "warning": "Yogurt cucumber sauce: 100.0g is outside the single-serving guideline (20-60). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "19bbb157",
+      "label": "false_alarm",
+      "reason": "The visible food is a complete stew with meat, vegetables, and broth. A 30–180 g guideline is inappropriate for this whole-dish role.",
+      "photo": "meal_006.webp",
+      "warning": "Chicken and vegetable stew: 700.0g is outside the single-serving guideline (30-180). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z"
+      ]
+    },
+    {
+      "candidate_id": "1fccb73a",
+      "label": "indeterminate",
+      "reason": "Rice forms the meal's base, but its depth and mass cannot be established from the photo. The image cannot establish whether this numerical warning is warranted.",
+      "photo": "meal_007.webp",
+      "warning": "Cooked white rice: 180.0g is outside the single-serving guideline (20-150). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "2f2a6060",
+      "label": "indeterminate",
+      "reason": "Chocolate sauce is visible on the dessert and outside the glass, but its consumed mass cannot be determined. The image cannot resolve the numerical threshold claim.",
+      "photo": "meal_002.webp",
+      "warning": "Chocolate sauce: 35.0g is outside the single-serving guideline (2-30). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "44a6aa16",
+      "label": "indeterminate",
+      "reason": "Several meatballs are visible, but their combined mass cannot be inferred reliably. The photo does not establish whether the stated serving limit is applicable.",
+      "photo": "meal_007.webp",
+      "warning": "Cooked meatballs: 160.0g is outside the single-serving guideline (10-150). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "4f334c0e",
+      "label": "false_alarm",
+      "reason": "Three fried eggs are visible. Applying a 45–60 g bound to their combined portion treats a multiple-egg serving like one egg.",
+      "photo": "meal_008.webp",
+      "warning": "Fried chicken eggs: 150.0g is outside the single-serving guideline (45-60). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z"
+      ]
+    },
+    {
+      "candidate_id": "66db616e",
+      "label": "useful",
+      "reason": "The dessert visibly contains multiple scoops, making the consumed amount and servings relevant to confirm. The stated grams cannot be verified.",
+      "photo": "meal_002.webp",
+      "warning": "Vanilla ice cream: 240.0g is outside the single-serving guideline (15-100). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "676c55d5",
+      "label": "useful",
+      "reason": "Scrambling obscures the original egg count. Asking for that count and the consumed portion requests information the photo cannot supply.",
+      "photo": "meal_004.webp",
+      "warning": "Scrambled eggs: Count unknown; the per-item guideline cannot be checked. Confirm the item count and consumed portion.",
+      "source_runs": [
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "795a4418",
+      "label": "false_alarm",
+      "reason": "The parsley serves as a small garnish. A minimum serving guideline that flags a small garnish is inappropriate to that visible role.",
+      "photo": "meal_004.webp",
+      "warning": "Parsley: 3.0g is outside the single-serving guideline (5-40). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "8cf3d257",
+      "label": "useful",
+      "reason": "A bowl of prepared stew is shown, while the amount actually consumed is unknown. Confirming the consumed portion is relevant.",
+      "photo": "meal_006.webp",
+      "warning": "Chicken and vegetable stew: Confirm the consumed portion of this prepared or shared dish.",
+      "source_runs": [
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "8ddad6b8",
+      "label": "false_alarm",
+      "reason": "The image shows a whole casserole in a baking dish. A 15–150 g guideline is inappropriate for assessing the pictured whole dish.",
+      "photo": "meal_003.webp",
+      "warning": "Broccoli cheese casserole: 1200.0g is outside the single-serving guideline (15-150). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z"
+      ]
+    },
+    {
+      "candidate_id": "9b7207d6",
+      "label": "useful",
+      "reason": "Several overlapping toast pieces are visible; their exact count and the amount consumed are not fully clear. Confirmation has practical value.",
+      "photo": "meal_004.webp",
+      "warning": "Toast: Count unknown; the per-item guideline cannot be checked. Confirm the item count and consumed portion.",
+      "source_runs": [
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "c16cc6b4",
+      "label": "useful",
+      "reason": "A whole pizza is shown without evidence of the fraction eaten. Confirming the consumed portion directly addresses that uncertainty.",
+      "photo": "meal_009.webp",
+      "warning": "Pepperoni pizza: Confirm the consumed portion of this prepared or shared dish.",
+      "source_runs": [
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "c36867da",
+      "label": "indeterminate",
+      "reason": "The scrambled eggs are visibly a plated component, but their mass and original egg count are unknown. The numerical serving claim cannot be resolved visually.",
+      "photo": "meal_004.webp",
+      "warning": "Scrambled eggs: 140.0g is outside the single-serving guideline (60-120). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z"
+      ]
+    },
+    {
+      "candidate_id": "c61cb00f",
+      "label": "false_alarm",
+      "reason": "The microgreens appear as a garnish on a larger mixed bowl. Applying a minimum portion guideline to this garnish creates an inappropriate warning.",
+      "photo": "meal_005.webp",
+      "warning": "Microgreens: 8.0g is outside the single-serving guideline (10-150). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "d300a95c",
+      "label": "useful",
+      "reason": "The casserole remains in its baking dish, and the eater's share is unspecified. Asking for the consumed portion addresses relevant missing information.",
+      "photo": "meal_003.webp",
+      "warning": "Broccoli cheese casserole: Confirm the consumed portion of this prepared or shared dish.",
+      "source_runs": [
+        "2026-10-29T23-30-02-789Z"
+      ]
+    },
+    {
+      "candidate_id": "f34fa60a",
+      "label": "indeterminate",
+      "reason": "Yogurt is shown in a small side bowl, but the image cannot distinguish the stated mass from the guideline boundary or establish how much was consumed.",
+      "photo": "meal_004.webp",
+      "warning": "Yogurt: 70.0g is outside the single-serving guideline (20-60). Confirm the visible portion and number of servings.",
+      "source_runs": [
+        "2026-10-29T23-20-04-216Z",
+        "2026-10-29T23-30-02-789Z"
+      ]
+    }
+  ],
+  "limitations": [
+    "The reviewer read only the shuffled packet and its eight referenced original photos; implementation, version metadata, prior annotations and previous judgments were withheld.",
+    "Warning text itself may suggest a design approach; masking cannot guarantee which version a reviewer might infer.",
+    "Same-model review is not a human review or a measured accuracy determination.",
+    "Useful means contextual review value, not verification of a numerical guideline, grams or calories.",
+    "This review predates the later herb/grouped-item class changes; do not reuse its labels automatically for reworded/new warnings."
+  ],
+  "revised_summary": {
+    "run_id": "2026-10-29T23-30-02-789Z",
+    "warning_count": 13,
+    "useful": 7,
+    "false_alarm": 2,
+    "indeterminate": 4
+  }
+}
